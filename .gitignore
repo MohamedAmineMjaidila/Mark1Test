@@ -1,0 +1,44 @@
+# Unity generated data and caches
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# Unity local tooling and generated packages
+[Aa]sset[Ss]tore[Tt]ools/
+[Aa]ssets/[Aa]sset[Ss]tore[Tt]ools*/
+[Pp]ackages/[Uu]nity[Cc]ollection[Ss]ync~/
+
+# IDE and editor-generated files
+.vs/
+.vscode/
+.idea/
+*.csproj
+*.sln
+*.slnx
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+
+# OS metadata and local tooling
+.DS_Store
+Thumbs.db
+.utmp/
+
+# Build artifacts
+*.apk
+*.aab
+*.app
+*.exe
+*.dmg
+*.ipa
+*.unitypackage
