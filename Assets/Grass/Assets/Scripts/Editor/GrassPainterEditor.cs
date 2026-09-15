@@ -164,6 +164,23 @@ public class GrassPainterEditor : Editor
         EditorGUILayout.Space(5);
 
         if (GUILayout.Button("Open tuning guide / algorithm reference")) GrassExperimentProfileEditor.OpenGuide();
+        EditorGUILayout.LabelField("Full configuration", EditorStyles.boldLabel);
+        var configurationProperty = serializedObject.FindProperty("fullConfiguration");
+        EditorGUI.BeginChangeCheck();
+        EditorGUILayout.PropertyField(configurationProperty, new GUIContent("Configuration template"));
+        bool configurationChanged = EditorGUI.EndChangeCheck();
+        if ((configurationChanged || GUILayout.Button("Apply full configuration to a new working profile")) && configurationProperty.objectReferenceValue)
+        {
+            serializedObject.ApplyModifiedProperties();
+            GrassLegacyConfigurationBuilder.Apply(grassRenderer, configurationProperty.objectReferenceValue as GrassConfiguration);
+            serializedObject.Update();
+        }
+        using (new EditorGUI.DisabledScope(EditorApplication.isPlaying))
+            if (GUILayout.Button("Capture current legacy renderer as full configuration"))
+            {
+                serializedObject.ApplyModifiedProperties(); GrassLegacyConfigurationBuilder.Capture(grassRenderer, true); serializedObject.Update();
+            }
+        EditorGUILayout.HelpBox("Full configurations select field data and every profile setting. Each application creates a working profile, preserving the template and your previous tuning. Scene assignments made in Play Mode revert on exit; profile assets persist.", MessageType.None);
         SerializedProperty rendererMode = serializedObject.FindProperty("renderingMode");
         EditorGUILayout.PropertyField(rendererMode);
         bool experimental = rendererMode.enumValueIndex == (int)GrassRenderer.RenderingMode.ImmutableField;
@@ -172,12 +189,19 @@ public class GrassPainterEditor : Editor
             EditorGUILayout.PropertyField(serializedObject.FindProperty("fieldData"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("experimentProfile"));
             var selectedProfile = serializedObject.FindProperty("experimentProfile").objectReferenceValue as GrassExperimentProfile;
+            using (new EditorGUI.DisabledScope(!selectedProfile || !EditorUtility.IsPersistent(selectedProfile)))
             if (GUILayout.Button("Duplicate profile for a new experiment") && selectedProfile)
             {
                 string path = AssetDatabase.GenerateUniqueAssetPath(System.IO.Path.GetDirectoryName(AssetDatabase.GetAssetPath(selectedProfile)) + "/" + selectedProfile.name + " Copy.asset");
                 AssetDatabase.CopyAsset(AssetDatabase.GetAssetPath(selectedProfile), path);
                 serializedObject.FindProperty("experimentProfile").objectReferenceValue = AssetDatabase.LoadAssetAtPath<GrassExperimentProfile>(path);
                 selectedProfile = serializedObject.FindProperty("experimentProfile").objectReferenceValue as GrassExperimentProfile;
+            }
+            var benchmark = grassRenderer.GetComponent<GrassBenchmark>();
+            if (EditorApplication.isPlaying && benchmark && benchmark.ActiveRuntimeProfile == selectedProfile && benchmark.profiles != null && benchmark.profiles.Length > 0)
+            {
+                selectedProfile = benchmark.profiles[Mathf.Clamp(benchmark.selectedProfile, 0, benchmark.profiles.Length - 1)];
+                EditorGUILayout.LabelField("Tuning benchmark source asset", selectedProfile ? selectedProfile.name : "None");
             }
             if (selectedProfile)
             {
@@ -189,12 +213,39 @@ public class GrassPainterEditor : Editor
                 }
                 if (grassRenderer.Field && !selectedProfile.IsValid(grassRenderer.Field, out string error)) EditorGUILayout.HelpBox(error, MessageType.Error);
             }
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("grassSun"));
+            if (!selectedProfile || selectedProfile.algorithms.model != GrassRendererModel.LegacyReference)
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("grassSun"));
+            else EditorGUILayout.HelpBox("Legacy lighting uses URP's main directional light and scene ambient lighting.", MessageType.None);
             EditorGUILayout.PropertyField(mainCamera);
             EditorGUILayout.PropertyField(terrain);
             EditorGUILayout.PropertyField(renderInEditMode);
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("bakeCellSpacing"));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("bakeSeed"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("showInSceneView"));
+            EditorGUILayout.HelpBox("Scene view has its own camera culling and preview buffers. Hide Scene view or disable this preview while profiling Game view.", MessageType.None);
+            EditorGUILayout.LabelField("Live LOD mesh state", EditorStyles.boldLabel);
+            for (int lod = 0; lod < 3; lod++)
+            {
+                var d = grassRenderer.GetLodDiagnostics(lod);
+                EditorGUILayout.LabelField($"LOD {lod}", $"{d.segments} segments · {d.vertices} vertices · {d.meshIndices / 3} triangles/blade");
+            }
+            if (GUILayout.Button("Verify GPU draw indices (one-time readback)"))
+                for (int lod = 0; lod < 3; lod++)
+                {
+                    var d = grassRenderer.GetLodDiagnostics(lod, true);
+                    Debug.Log($"LOD {lod}: mesh indices={d.meshIndices}, GPU argument indices={d.argumentIndices}, instances={d.instances}", grassRenderer);
+                }
+            if (grassRenderer.Field && grassRenderer.Field.HasLegacySnapshot)
+            {
+                EditorGUILayout.LabelField("Legacy placement bake inputs (apply with Bake Field)", EditorStyles.boldLabel);
+                EditorGUILayout.PropertyField(grassCount); EditorGUILayout.PropertyField(terrainSize);
+                EditorGUILayout.PropertyField(minGrassHeight); EditorGUILayout.PropertyField(maxGrassHeight);
+                EditorGUILayout.PropertyField(clumpScale); EditorGUILayout.PropertyField(clumpStrength);
+                EditorGUILayout.PropertyField(heightScale); EditorGUILayout.PropertyField(heightFactor); EditorGUILayout.PropertyField(angleVariation);
+            }
+            else
+            {
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("bakeCellSpacing"));
+                EditorGUILayout.PropertyField(serializedObject.FindProperty("bakeSeed"));
+            }
             EditorGUILayout.PropertyField(densityMap); EditorGUILayout.PropertyField(densityThreshold);
             EditorGUILayout.HelpBox("Placement controls require Bake Field outside Play Mode. Paint + Save Mask, or sculpt terrain, then bake. Occupancy is stored in the field asset and uploaded once per field rebuild.", MessageType.Info);
             using (new EditorGUI.DisabledScope(EditorApplication.isPlaying))
@@ -381,7 +432,8 @@ public class GrassPainterEditor : Editor
             serializedObject.FindProperty("fieldData").objectReferenceValue = field;
             serializedObject.ApplyModifiedProperties();
         }
-        GrassFieldBaker.Bake(field, source.terrainData, grassRenderer.densityMap, grassRenderer.bakeCellSpacing, grassRenderer.bakeSeed, grassRenderer.densityThreshold);
+        if (field.HasLegacySnapshot) GrassLegacyConfigurationBuilder.BakeField(grassRenderer, field);
+        else GrassFieldBaker.Bake(field, source.terrainData, grassRenderer.densityMap, grassRenderer.bakeCellSpacing, grassRenderer.bakeSeed, grassRenderer.densityThreshold);
         grassRenderer.Refresh();
     }
 

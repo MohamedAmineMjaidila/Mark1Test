@@ -8,12 +8,28 @@ float4 _GrassNormal; // cos(roundness), sin(roundness), stabilization, angle
 
 float4 _GrassWaveA, _GrassWaveB, _GrassGustWave, _GrassWaveParams;
 
+#if defined(GRASS_TEST_LEGACYWIND)
+TEXTURE2D(_WindMap); SAMPLER(sampler_WindMap);
+float4 _WindVelocity;
+float _WindFrequency, _WindDisableDistance, _WindGustStrength, _WindFlutterStrength;
+#endif
 struct GrassBendResult { float3 center; float3 tangent; };
 
 float2 GrassWindOffset(float3 root, uint id)
 {
 #if defined(GRASS_TEST_WINDOFF)
     return 0;
+#elif defined(GRASS_TEST_LEGACYWIND)
+    float phase = GrassRandom(id, 0x85321u) * 6.2831853;
+    float stiffness = lerp(_GrassWaveParams.y, _GrassWaveParams.z, GrassRandom(id, 0x91623u));
+    #if defined(GRASS_HAS_LEGACY_FIELD)
+        uint packed = _GrassLegacyRecords[id].windStiffness;
+        phase = f16tof32(packed); stiffness = f16tof32(packed >> 16);
+    #endif
+    float fade = 1.0 - saturate((distance(root, _GrassCamera.xyz) - (_WindDisableDistance - 10.0)) / 10.0);
+    float sample = SAMPLE_TEXTURE2D_LOD(_WindMap, sampler_WindMap, root.xz * _WindFrequency + _GrassWindDetail.z * _WindVelocity.xy, 0).r;
+    float flutter = sin(_GrassWindDetail.z * 15.0 + phase * 10.0) * _WindFlutterStrength;
+    return normalize(_WindVelocity.xy + float2(1e-12, 0)) * ((sample * _WindGustStrength + flutter) * (2.0 - stiffness) * fade);
 #else
     float time = _GrassWindDetail.z * _GrassWind.w;
     float phase = dot(root.xz, _GrassWaveA.xy) - time * _GrassWaveA.z + _GrassWaveA.w;

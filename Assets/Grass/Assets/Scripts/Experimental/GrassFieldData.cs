@@ -29,6 +29,18 @@ namespace GrassFlow
         [SerializeField] private string bakeDescription;
         [SerializeField, HideInInspector] private int revision;
 
+        [SerializeField, HideInInspector] private TextAsset legacySnapshot;
+        [SerializeField, HideInInspector] private Vector3 legacyBakeOrigin;
+        [SerializeField, HideInInspector] private float placementPadding, maximumLegacyHeight;
+        public TextAsset LegacySnapshot => legacySnapshot;
+        public bool HasLegacySnapshot => legacySnapshot;
+        public Vector3 LegacyBakeOrigin => legacyBakeOrigin;
+        public float PlacementPadding => placementPadding;
+        public float MaximumLegacyHeight => maximumLegacyHeight;
+        public void SetLegacySnapshot(TextAsset data, Vector3 origin, float padding, float maxHeight)
+        {
+            legacySnapshot = data; legacyBakeOrigin = origin; placementPadding = padding; maximumLegacyHeight = maxHeight; revision++;
+        }
         public Vector3 TerrainSize => terrainSize;
         public float CellSpacing => cellSpacing;
         public int Seed => seed;
@@ -63,10 +75,12 @@ namespace GrassFlow
 
         // Editor baking is the only writer. Runtime code only uploads/reads the resulting asset.
         public void SetBakedData(Vector3 size, float spacing, int fieldSeed, int[] words,
-            GrassTile[] bakedTiles, int count, Texture2D heights, bool mathematical, Vector4 model, string description)
+            GrassTile[] bakedTiles, int count, Texture2D heights, bool mathematical, Vector4 model, string description, int exactColumns = 0, int exactRows = 0)
         {
             terrainSize = size; cellSpacing = spacing; seed = fieldSeed;
-            columns = GrassGrid.CellCount(size.x, spacing); rows = GrassGrid.CellCount(size.z, spacing);
+            columns = exactColumns > 0 ? exactColumns : GrassGrid.CellCount(size.x, spacing);
+            rows = exactRows > 0 ? exactRows : GrassGrid.CellCount(size.z, spacing);
+            legacySnapshot = null; placementPadding = 0; maximumLegacyHeight = 0;
             occupancyWords = words; tiles = bakedTiles; occupiedCount = count;
             heightTexture = heights; analyticCompatible = mathematical; analyticModel = model;
             bakeDescription = description; formatVersion = 1;

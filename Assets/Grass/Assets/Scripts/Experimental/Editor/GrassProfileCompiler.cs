@@ -54,9 +54,10 @@ namespace GrassFlow.Editor
                 source.AppendLine($"#define GRASS_LOD {lod}");
                 foreach (string define in profile.algorithms.Defines()) source.AppendLine("#define " + define + " 1");
                 source.AppendLine("#include \"Assets/Grass/Assets/Shaders/Experimental/Includes/GrassProgram.hlsl\"\nENDHLSL\n} } }");
-                if (!File.Exists(path) || File.ReadAllText(path) != source.ToString())
+                string shaderSource = profile.algorithms.model == GrassRendererModel.LegacyReference ? GrassLegacyShaderSource.Build(hash, lod) : source.ToString();
+                if (!File.Exists(path) || File.ReadAllText(path) != shaderSource)
                 {
-                    File.WriteAllText(path, source.ToString());
+                    File.WriteAllText(path, shaderSource);
                     AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
                 }
                 shaders[lod] = AssetDatabase.LoadAssetAtPath<Shader>(path);

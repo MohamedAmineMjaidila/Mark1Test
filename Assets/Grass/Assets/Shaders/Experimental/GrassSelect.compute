@@ -1,6 +1,8 @@
 #pragma kernel SelectTiles
 #pragma kernel BuildArguments
 #pragma multi_compile_local _ GRASS_MATH_HEIGHT
+#pragma multi_compile_local _ GRASS_LEGACY_FIELD
+#pragma multi_compile_local _ GRASS_LEGACY_SELECTION
 #include "Includes/GrassField.hlsl"
 
 RWStructuredBuffer<uint> _GrassVisible0;

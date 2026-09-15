@@ -62,8 +62,13 @@ GrassVaryings GrassVertex(GrassAttributes input, uint instance : SV_InstanceID)
 #endif
     float heightT = saturate(input.uv.y);
     float height = GrassHeight(id);
+#if defined(GRASS_HAS_LEGACY_FIELD)
+    uint facing = _GrassLegacyRecords[id].facing;
+    float s = f16tof32(facing), c = f16tof32(facing >> 16);
+#else
     float angle = GrassRandom(id, 0x61823u) * 6.2831853;
     float s, c; sincos(angle, s, c);
+#endif
     float3 side = float3(c, 0, -s);
     float3 forward = float3(s, 0, c);
     GrassBendResult bend = GrassBend(heightT, height, GrassWindOffset(root, id), forward);
@@ -71,7 +76,11 @@ GrassVaryings GrassVertex(GrassAttributes input, uint instance : SV_InstanceID)
     side = GrassSafeNormal(side - bend.tangent * dot(side, bend.tangent));
     float3 flat = GrassSafeNormal(cross(side, bend.tangent));
     float widthCoordinate = input.uv.x * 2.0 - 1.0;
+#if defined(GRASS_HAS_LEGACY_SELECTION)
+    float distanceToCamera = length(root - _GrassCamera.xyz);
+#else
     float distanceToCamera = length(root.xz - _GrassCamera.xz);
+#endif
     float width = _GrassBlade.z * GrassWidthScale(distanceToCamera) * (1.0 - heightT);
     float3 position = root + bend.center + side * (widthCoordinate * width * 0.5);
 #if defined(GRASS_TEST_WIDENING)

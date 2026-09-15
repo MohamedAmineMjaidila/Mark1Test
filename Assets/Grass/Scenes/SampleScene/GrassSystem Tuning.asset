@@ -13,54 +13,57 @@ MonoBehaviour:
   m_Name: GrassSystem Tuning
   m_EditorClassIdentifier: Grass.Experimental::GrassFlow.GrassExperimentProfile
   drawPath: 1
-  preset: 24
+  preset: 13
   algorithms:
+    model: 0
+    placement: 0
+    selection: 0
     bending: 0
-    wind: 0
+    wind: 1
     height: 0
     normals: 0
     colorVariation: 0
     dryness: 0
     view: 0
     diffuse: 0
-    ambient: 0
-    transmission: 0
+    ambient: 1
+    transmission: 1
     specular: 0
     stabilization: 0
     farLighting: 1
     precision: 0
-    ambientOcclusion: 0
+    ambientOcclusion: 1
     viewWidening: 0
   algorithmVersion: 1
-  compiledAlgorithmKey: GRASS_TEST_LOD2FRAGMENT
+  compiledAlgorithmKey: GRASS_TEST_ONEWAVE;GRASS_TEST_AMBIENTSH;GRASS_TEST_TRANSMISSIONLEGACY;GRASS_TEST_LOD2FRAGMENT;GRASS_TEST_LEGACYAO
   algorithmsReady: 1
-  lod0Shader: {fileID: 4800000, guid: 3f4c39ba039d34519ad60d4b3e408dc4, type: 3}
-  lod1Shader: {fileID: 4800000, guid: 55ca2792113e542bb918fcc1e5f0bdc8, type: 3}
-  lod2Shader: {fileID: 4800000, guid: f99a0d60d8baf4718b048daa0a18f424, type: 3}
+  lod0Shader: {fileID: 4800000, guid: fa22eaaa58289465c82e4ea4945a8345, type: 3}
+  lod1Shader: {fileID: 4800000, guid: 4aa8d566c233a4d0f800262f8d007ee2, type: 3}
+  lod2Shader: {fileID: 4800000, guid: 0417db0251f70426ca39db6bf50ed4d1, type: 3}
   selectionShader: {fileID: 7200000, guid: c4ad859fb66b54c7cb5a7df5d227db9b, type: 3}
-  lod0Distance: 20
+  lod0Distance: 1
   lod1Distance: 40
-  maxDrawDistance: 100
-  lod0Segments: 1
-  lod1Segments: 1
+  maxDrawDistance: 80
+  lod0Segments: 15
+  lod1Segments: 15
   lod2Segments: 1
-  bladeHeights: {x: 0.39000002, y: 1.3}
+  bladeHeights: {x: 0.3, y: 1}
   bladeWidth: 0.06
-  naturalBend: 0.23
+  naturalBend: 0.774
   densityFalloffStart: 10
   minimumDensity: 0.01
   widthCompensation: 0
-  maximumWidthScale: 1.5
+  maximumWidthScale: 1.524
   transitionWidth: 3
   windDirection: {x: 1, y: 0}
-  windStrength: 0.35
+  windStrength: 0.931
   windSpeed: 0.5
-  gustStrength: 2
+  gustStrength: 3
   flutterStrength: 0.04
   waveA: {x: 0.11, y: 0.07, z: 1.3, w: 0}
   waveB: {x: -0.055, y: 0.093, z: 0.79, w: 1.8}
-  secondWaveWeight: 0.208
-  gustWave: {x: 0.02, y: 1, z: 0.9, w: 15}
+  secondWaveWeight: 1
+  gustWave: {x: 0.09, y: 0.6, z: 0.9, w: 15}
   stiffnessRange: {x: 0.8, y: 1}
   patchSizeCells: 32
   colorPatchWeight: 0.794
@@ -76,12 +79,22 @@ MonoBehaviour:
   dryness: 0.15
   roundnessRadians: 0.65
   normalStabilization: {x: 0, y: 0.3, z: 0.75}
-  rootDarkness: 0.4
+  rootDarkness: 0.407
   aoCurveWeights: {x: 0, y: 1, z: 0}
-  transmission: 0.5
+  transmission: 0.448
   transmissionPower: 3
-  specular: 0.1
+  specular: 0.101
   specularPower: 32
   widening: 0.15
+  legacyWindMap: {fileID: 0}
+  legacyWindVelocity: {x: 1, y: 0}
+  legacyWindFrequency: 0.05
+  legacyWindDisableDistance: 150
+  legacyHeightMultiplier: 1
+  legacyCameraFacing: 0
+  legacyShadowSoftness: 0.3
+  legacyCastShadows: 0
+  legacyCastShadowsLod1: 0
+  legacyCastShadowsLod2: 0
   collectCounters: 0
   counterInterval: 1

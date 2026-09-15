@@ -81,5 +81,38 @@ namespace GrassFlow.Tests
             }
             finally { UnityEngine.Object.DestroyImmediate(profile); }
         }
+        [TestCase(GrassDrawPath.CompactedIds)]
+        [TestCase(GrassDrawPath.DirectGrid)]
+        public void EveryLodSegmentEditUpdatesMeshAndGpuArguments(GrassDrawPath path)
+        {
+            var field = AssetDatabase.LoadAssetAtPath<GrassFieldData>("Assets/Grass/Benchmark/RepresentativeField.asset");
+            var profile = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GrassExperimentProfile>("Assets/Grass/Benchmark/Profiles/CompactedIds_Optimized.asset"));
+            var cameraObject = new GameObject("LOD mutation test camera");
+            try
+            {
+                profile.drawPath = path;
+                var camera = cameraObject.AddComponent<Camera>(); camera.enabled = false;
+                camera.transform.position = new Vector3(40, 12, 0); camera.transform.rotation = Quaternion.Euler(21,0,0);
+                using (var renderer = new GrassFieldRenderer(field, profile))
+                {
+                    foreach (int[] counts in new[] { new[] {1,1,1}, new[] {8,5,3}, new[] {15,7,2} })
+                    {
+                        // Deliberately no OnValidate/NotifyChanged: topology must be observed directly.
+                        profile.lod0Segments = counts[0]; profile.lod1Segments = counts[1]; profile.lod2Segments = counts[2];
+                        renderer.Render(camera, Vector3.zero, null, 0);
+                        for (int lod = 0; lod < 3; lod++)
+                        {
+                            var d = renderer.GetLodDiagnostics(lod, true);
+                            Assert.That(d.segments, Is.EqualTo(counts[lod]), "LOD " + lod);
+                            Assert.That(d.vertices, Is.EqualTo(2 * counts[lod] + 1), "LOD " + lod);
+                            Assert.That(d.meshIndices, Is.EqualTo((2 * counts[lod] - 1) * 3), "LOD " + lod);
+                            Assert.That(d.argumentIndices, Is.EqualTo(d.meshIndices), "GPU indirect draw must use new mesh topology, LOD " + lod);
+                        }
+                    }
+                }
+            }
+            finally { UnityEngine.Object.DestroyImmediate(cameraObject); UnityEngine.Object.DestroyImmediate(profile); }
+        }
+
     }
 }

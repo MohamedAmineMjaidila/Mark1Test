@@ -341,20 +341,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GrassRenderer
   renderingMode: 1
   fieldData: {fileID: 11400000, guid: 637cb3d5940de4231990f2e1d5b7e868, type: 2}
+  fullConfiguration: {fileID: 0}
   experimentProfile: {fileID: 11400000, guid: 17a008329f5a2483ca9ca8677c8faba0, type: 2}
   grassSun: {fileID: 410087040}
-  bakeCellSpacing: 0.057142857
-  bakeSeed: 1729
+  bakeCellSpacing: 0.05714286
+  bakeSeed: 1739
+  showInSceneView: 1
   customGrassMesh: {fileID: 0}
-  grassCount: 20164
+  grassCount: 1500625
   terrainSize: 70
   minGrassHeight: 0.3
   maxGrassHeight: 1
   lod0Segments: 15
   lod1Segments: 15
   lod2Segments: 15
-  lod0Distance: 80
-  lod1Distance: 40
+  lod0Distance: 40
+  lod1Distance: 80
   maxDrawDistance: 100
   windDisableDistance: 150
   enableDensityScaling: 1
@@ -371,7 +373,7 @@ MonoBehaviour:
   hizComputeShader: {fileID: 0}
   grassMaterial: {fileID: 2100000, guid: e5e936fc3f91f44558851d4f3181fd9b, type: 2}
   terrain: {fileID: 1287080605}
-  castShadows: 1
+  castShadows: 0
   castShadowsLOD1: 0
   castShadowsLOD2: 0
   receiveShadows: 0
@@ -442,7 +444,7 @@ Terrain:
   m_HeightmapMaximumLOD: 0
   m_ShadowCastingMode: 2
   m_DrawHeightmap: 1
-  m_DrawInstanced: 0
+  m_DrawInstanced: 1
   m_DrawTreesAndFoliage: 1
   m_StaticShadowCaster: 0
   m_IgnoreQualitySettings: 0

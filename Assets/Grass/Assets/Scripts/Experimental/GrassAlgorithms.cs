@@ -4,7 +4,10 @@ using System.Collections.Generic;
 namespace GrassFlow
 {
     public enum GrassBending { NormalizedCurve, CubicBezier }
-    public enum GrassWind { TwoWaves, OneWave, Off }
+    public enum GrassWind { TwoWaves, OneWave, Off, LegacyTexture }
+    public enum GrassRendererModel { Modular, LegacyReference }
+    public enum GrassPlacement { CellGrid, LegacySnapshot }
+    public enum GrassSelection { StableField, LegacyDistanceAndDensity }
     public enum GrassHeight { BakedTexture, MathematicalFixture }
     public enum GrassNormal { RoundedVertex, Flat, DualNormalFragment, AnalyticFragment }
     public enum GrassVariation { SmoothPatchAndBlade, PerBlade, LegacyFragmentHash }
@@ -22,6 +25,9 @@ namespace GrassFlow
     [Serializable]
     public sealed class GrassAlgorithms
     {
+        public GrassRendererModel model;
+        public GrassPlacement placement;
+        public GrassSelection selection;
         public GrassBending bending;
         public GrassWind wind;
         public GrassHeight height;
@@ -41,8 +47,13 @@ namespace GrassFlow
 
         public string[] Defines()
         {
+            if (model == GrassRendererModel.LegacyReference)
+                return new[] { "GRASS_TEST_LEGACYMODEL", "GRASS_TEST_LEGACYFIELD", "GRASS_TEST_LEGACYSELECTION" };
             var d = new List<string>();
             void Add(bool condition, string name) { if (condition) d.Add("GRASS_TEST_" + name); }
+            Add(placement == GrassPlacement.LegacySnapshot, "LEGACYFIELD");
+            Add(selection == GrassSelection.LegacyDistanceAndDensity, "LEGACYSELECTION");
+            Add(wind == GrassWind.LegacyTexture, "LEGACYWIND");
             Add(bending == GrassBending.CubicBezier, "BEZIER");
             Add(wind == GrassWind.OneWave, "ONEWAVE"); Add(wind == GrassWind.Off, "WINDOFF");
             Add(height == GrassHeight.MathematicalFixture, "MATHEMATICALHEIGHT");

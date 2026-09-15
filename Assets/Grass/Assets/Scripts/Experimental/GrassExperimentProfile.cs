@@ -45,7 +45,7 @@ namespace GrassFlow
         [Range(0, 1)] public float naturalBend = 0.3f;
         [Min(0)] public float densityFalloffStart = 30;
         [Range(0.001f, 1)] public float minimumDensity = 0.1f;
-        [Range(0, 1)] public float widthCompensation = 0.3f;
+        [Range(0, 2)] public float widthCompensation = 0.3f;
         [Range(1, 3)] public float maximumWidthScale = 1.5f;
         [Min(0)] public float transitionWidth = 3;
 
@@ -76,7 +76,7 @@ namespace GrassFlow
         public Color groundAmbient = new Color(0.055f, 0.07f, 0.025f);
         [Range(0, 1)] public float colorVariation = 0.2f;
         [Range(0, 1)] public float dryness = 0.15f;
-        [Range(0, 1.5f)] public float roundnessRadians = 0.65f;
+        [Range(0, 3.1415927f)] public float roundnessRadians = 0.65f;
         public Vector3 normalStabilization = new Vector3(0, 0.3f, 0.75f);
         [Range(0, 1)] public float rootDarkness = 0.4f;
         [Tooltip("Weights for linear, squared and smoothstep AO. Normalized when uploaded.")]
@@ -86,6 +86,19 @@ namespace GrassFlow
         [Range(0, 1)] public float specular = 0.1f;
         [Range(8, 128)] public float specularPower = 32;
         [Range(0, 0.5f)] public float widening = 0.15f;
+
+        [Header("Legacy wind / full reference model")]
+        public Texture2D legacyWindMap;
+        public Vector2 legacyWindVelocity = Vector2.right;
+        [Min(0)] public float legacyWindFrequency = 0.05f;
+        [Min(0)] public float legacyWindDisableDistance = 150;
+        [Min(0.001f)] public float legacyHeightMultiplier = 1;
+        [Range(0, 1)] public float legacyCameraFacing;
+        [Range(0, 1)] public float legacyShadowSoftness = 0.3f;
+        public bool legacyCastShadows, legacyCastShadowsLod1, legacyCastShadowsLod2;
+        public bool UsesLegacyField => algorithms != null && (algorithms.model == GrassRendererModel.LegacyReference || algorithms.placement == GrassPlacement.LegacySnapshot);
+        public bool UsesHeightSamples => !UsesLegacyField || algorithms.model == GrassRendererModel.Modular && algorithms.stabilization == GrassStabilization.Terrain;
+        public bool UsesLegacySelection => algorithms != null && (algorithms.model == GrassRendererModel.LegacyReference || algorithms.selection == GrassSelection.LegacyDistanceAndDensity);
 
         [Header("Diagnostics")]
         public bool collectCounters;
@@ -100,12 +113,13 @@ namespace GrassFlow
         {
             error = null;
             if (!lod0Shader || !lod1Shader || !lod2Shader || !selectionShader) error = "Assign all three LOD shaders and the selection compute shader.";
-            else if (!(0 < lod0Distance && lod0Distance < lod1Distance && lod1Distance < maxDrawDistance) || !float.IsFinite(maxDrawDistance)) error = "LOD distances must satisfy 0 < near < middle < far.";
+            else if ((!UsesLegacySelection && !(0 < lod0Distance && lod0Distance < lod1Distance && lod1Distance < maxDrawDistance)) || lod0Distance <= 0 || lod1Distance <= 0 || maxDrawDistance <= 0 || !float.IsFinite(maxDrawDistance)) error = "LOD distances must satisfy 0 < near < middle < far.";
             else if (bladeHeights.x <= 0 || bladeHeights.y < bladeHeights.x || bladeWidth <= 0 || !float.IsFinite(bladeHeights.y)) error = "Blade dimensions are invalid.";
             else if (minimumDensity <= 0 || minimumDensity > 1 || densityFalloffStart < 0 || densityFalloffStart >= maxDrawDistance) error = "Density range/falloff is invalid.";
             else if (lod0Segments < 1 || lod1Segments < 1 || lod2Segments < 1 || lod0Segments > 15 || lod1Segments > 15 || lod2Segments > 15) error = "LOD segments must be between 1 and 15.";
             else if (algorithms == null || !algorithmsReady) error = "Algorithm shaders are pending. Select this profile in the Inspector to compile them.";
-            else if (algorithms.height == GrassHeight.MathematicalFixture && !field.AnalyticCompatible) error = "Mathematical height requires the matching benchmark terrain fixture. Re-bake sculpted terrain as texture height.";
+            else if (UsesLegacyField && !field.HasLegacySnapshot) error = "This model requires a baked legacy snapshot. Apply the Legacy full configuration.";
+            else if (UsesHeightSamples && algorithms.height == GrassHeight.MathematicalFixture && !field.AnalyticCompatible) error = "Mathematical height requires the matching benchmark terrain fixture. Re-bake sculpted terrain as texture height.";
             return error == null;
         }
     }

@@ -1,0 +1,17 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e788b9a8631b2435996af180c1b3d82a, type: 3}
+  m_Name: Legacy Configuration
+  m_EditorClassIdentifier: Grass.Experimental::GrassFlow.GrassConfiguration
+  description: Snapshot of this renderer's legacy generator, material, LOD and density settings. Uses immutable baked 24-byte reference records plus occupancy and compacted 4-byte visible IDs. Reference equations and wind texture are preserved; this is a compatibility baseline, not the lowest-memory optimized field.
+  profileTemplate: {fileID: 11400000, guid: 53111b198e39340bf815a75d31948dec, type: 2}
+  field: {fileID: 11400000, guid: e59bfc94834b149bfb16d4d68270024b, type: 2}

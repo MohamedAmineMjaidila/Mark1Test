@@ -13,6 +13,7 @@ public class GrassRenderer : MonoBehaviour
     [Header("Experimental renderer")]
     [SerializeField] private RenderingMode renderingMode;
     [SerializeField] private GrassFieldData fieldData;
+    [SerializeField] private GrassConfiguration fullConfiguration;
     [SerializeField] private GrassExperimentProfile experimentProfile;
     [SerializeField] private Light grassSun;
     [Min(0.01f)] public float bakeCellSpacing = 0.067f;
@@ -26,10 +27,41 @@ public class GrassRenderer : MonoBehaviour
     private string lastConfigurationError;
     [System.NonSerialized] public bool useBenchmarkTime;
     [System.NonSerialized] public float benchmarkTime;
+    public GrassConfiguration Configuration => fullConfiguration;
+    public void ApplyConfiguration(GrassConfiguration configuration, GrassExperimentProfile workingProfile)
+    {
+        fullConfiguration = configuration; fieldData = configuration.field;
+        experimentProfile = workingProfile; renderingMode = RenderingMode.ImmutableField; needsUpdate = true;
+    }
     public GrassFieldData Field => fieldData;
     public GrassExperimentProfile Experiment => experimentProfile;
     public RenderingMode Mode => renderingMode;
     public Camera RenderingCamera => mainCamera;
+    public GrassLodDiagnostics GetLodDiagnostics(int lod, bool readGpu = false) => fieldRenderer != null ? fieldRenderer.GetLodDiagnostics(lod, readGpu) : default;
+#if UNITY_EDITOR
+    public bool showInSceneView = true;
+    private readonly System.Collections.Generic.Dictionary<Camera, GrassFieldRenderer> sceneViewRenderers = new System.Collections.Generic.Dictionary<Camera, GrassFieldRenderer>();
+    private readonly System.Collections.Generic.List<Camera> expiredSceneCameras = new System.Collections.Generic.List<Camera>();
+    public void ReleaseSceneViewPreview(Camera camera)
+    {
+        if (sceneViewRenderers.TryGetValue(camera, out var preview)) { preview.Dispose(); sceneViewRenderers.Remove(camera); }
+    }
+    private void RenderSceneView(ScriptableRenderContext context, Camera camera)
+    {
+        expiredSceneCameras.Clear();
+        foreach (var entry in sceneViewRenderers) if (!entry.Key) expiredSceneCameras.Add(entry.Key);
+        foreach (var expired in expiredSceneCameras) ReleaseSceneViewPreview(expired);
+        if (!showInSceneView || camera.cameraType != CameraType.SceneView || renderingMode != RenderingMode.ImmutableField || !isActiveAndEnabled ||
+            (!Application.isPlaying && !renderInEditMode) || !fieldData || !experimentProfile || !experimentProfile.algorithmsReady ||
+            !fieldData.IsValid(out _) || !experimentProfile.IsValid(fieldData, out _)) return;
+        if (!sceneViewRenderers.TryGetValue(camera, out var preview) || preview.NeedsRebuild(fieldData, experimentProfile))
+        {
+            preview?.Dispose(); preview = new GrassFieldRenderer(fieldData, experimentProfile); sceneViewRenderers[camera] = preview;
+        }
+        float time = useBenchmarkTime ? benchmarkTime : Application.isPlaying ? Time.time : Time.realtimeSinceStartup;
+        preview.Render(camera, terrain ? terrain.transform.position : transform.position, grassSun ? grassSun : RenderSettings.sun, time);
+    }
+#endif
     public GrassRenderStatistics Statistics => fieldRenderer != null ? fieldRenderer.Statistics : default;
 
     public void ConfigureExperimental(GrassFieldData field, GrassExperimentProfile profile, Camera camera, Terrain sourceTerrain, Light sun)
@@ -52,6 +84,9 @@ public class GrassRenderer : MonoBehaviour
 
     private void OnEnable()
     {
+#if UNITY_EDITOR
+        RenderPipelineManager.beginCameraRendering += RenderSceneView;
+#endif
         needsUpdate = true;
         legacyReadbacks = new System.Action<AsyncGPUReadbackRequest>[] {
             request => ReceiveLegacyCounter(request, 0), request => ReceiveLegacyCounter(request, 1), request => ReceiveLegacyCounter(request, 2) };
@@ -665,7 +700,7 @@ public class GrassRenderer : MonoBehaviour
         }
         needsUpdate = false;
         fieldRenderer.Render(mainCamera, terrain ? terrain.transform.position : transform.position,
-            grassSun ? grassSun : RenderSettings.sun, useBenchmarkTime ? benchmarkTime : Time.time);
+            grassSun ? grassSun : RenderSettings.sun, useBenchmarkTime ? benchmarkTime : Application.isPlaying ? Time.time : Time.realtimeSinceStartup);
     }
 
     private void ReceiveLegacyCounter(AsyncGPUReadbackRequest request, int lod)
@@ -702,6 +737,11 @@ public class GrassRenderer : MonoBehaviour
 
     private void OnDisable()
     {
+#if UNITY_EDITOR
+        RenderPipelineManager.beginCameraRendering -= RenderSceneView;
+        foreach (var preview in sceneViewRenderers.Values) preview.Dispose();
+        sceneViewRenderers.Clear();
+#endif
         fieldRenderer?.Dispose(); fieldRenderer = null;
         ReleaseLegacy();
     }
