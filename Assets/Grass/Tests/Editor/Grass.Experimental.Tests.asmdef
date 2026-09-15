@@ -1,0 +1,7 @@
+{
+  "name": "Grass.Experimental.Tests",
+  "references": ["Grass.Experimental", "Grass.Experimental.Editor"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Grass.Experimental.Editor",
+  "rootNamespace": "GrassFlow.Editor",
+  "references": ["Grass.Experimental"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}
