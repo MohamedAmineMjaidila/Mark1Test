@@ -14,9 +14,28 @@ MonoBehaviour:
   m_EditorClassIdentifier: Grass.Experimental::GrassFlow.GrassExperimentProfile
   drawPath: 0
   preset: 13
-  lod0Shader: {fileID: 4800000, guid: 99d8fd06f12a34a5d9b08577e848a892, type: 3}
-  lod1Shader: {fileID: 4800000, guid: 6ac2a64c46651485f8d5d9a6f95d20f7, type: 3}
-  lod2Shader: {fileID: 4800000, guid: 4e6237a9d6eb04b338cbfb5c4b8070e8, type: 3}
+  algorithms:
+    bending: 0
+    wind: 0
+    height: 0
+    normals: 0
+    colorVariation: 0
+    dryness: 0
+    view: 0
+    diffuse: 0
+    ambient: 1
+    transmission: 0
+    specular: 0
+    stabilization: 0
+    farLighting: 0
+    precision: 0
+    ambientOcclusion: 0
+    viewWidening: 0
+  algorithmVersion: 1
+  compiledAlgorithmKey: GRASS_TEST_AMBIENTSH
+  lod0Shader: {fileID: 4800000, guid: 79e3cda99faca4973b1d891a45812e5a, type: 3}
+  lod1Shader: {fileID: 4800000, guid: 4cd89794054ad409799fe7e1fce8fb1d, type: 3}
+  lod2Shader: {fileID: 4800000, guid: c56834c9c1768419a967a3aea57ec9f8, type: 3}
   selectionShader: {fileID: 7200000, guid: c4ad859fb66b54c7cb5a7df5d227db9b, type: 3}
   lod0Distance: 15
   lod1Distance: 40
@@ -37,6 +56,15 @@ MonoBehaviour:
   windSpeed: 1
   gustStrength: 0.35
   flutterStrength: 0.04
+  waveA: {x: 0.11, y: 0.07, z: 1.3, w: 0}
+  waveB: {x: -0.055, y: 0.093, z: 0.79, w: 1.8}
+  secondWaveWeight: 0.35
+  gustWave: {x: 0.017, y: 0.023, z: 0.37, w: 15}
+  stiffnessRange: {x: 0.8, y: 1}
+  patchSizeCells: 32
+  colorPatchWeight: 0.8
+  drynessPatchWeight: 0.85
+  legacyNoiseFrequency: 0.3
   rootColor: {r: 0.04, g: 0.08, b: 0.02, a: 1}
   midColor: {r: 0.15, g: 0.35, b: 0.08, a: 1}
   tipColor: {r: 0.45, g: 0.55, b: 0.15, a: 1}

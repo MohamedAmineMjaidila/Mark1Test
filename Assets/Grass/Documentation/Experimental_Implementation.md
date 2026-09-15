@@ -1,10 +1,12 @@
 # Native-resolution grass experiment
 
+**For current setup and all algorithm/numeric controls, read [the tuning README](../README.md).**
+
 This implementation follows the approved S23 plan. The current storage backend is a complete immutable, bit-packed occupancy field. **There is no circular occupancy buffer.** Both draw paths share this field; a streaming backend can be evaluated later without replacing blade identity or shading.
 
 ## Ownership
 
-`GrassRenderer` remains the scene owner. `GrassFieldData` is the editor-baked placement/height asset. `GrassExperimentProfile` selects a bounded compiled shader preset and either compacted IDs or direct grid submission. Runtime resource ownership is local to the renderer, with no global manager or service.
+`GrassRenderer` remains the scene owner. `GrassFieldData` is the editor-baked placement/height asset. `GrassExperimentProfile` selects independent algorithms specialized into a bounded set of shader assets and either compacted IDs or direct grid submission. Runtime resource ownership is local to the renderer, with no global manager or service.
 
 ## Data contract
 
@@ -23,7 +25,7 @@ Implementation and validation results are recorded here as each stage is complet
 
 ## Running and editing
 
-1. Open `Assets/Grass/Benchmark/GrassBenchmark.unity`. The original `SampleScene` remains the legacy reference.
+1. Open `Assets/Grass/Benchmark/GrassBenchmark.unity`. `SampleScene` now uses its own immutable field and tuning profile; Legacy Reference remains selectable on its GrassRenderer.
 2. Select **Grass benchmark**. Its `GrassRenderer` owns the resident field and renderer; its `GrassBenchmark` owns the camera route and measurement.
 3. Enter Play Mode. Previous/Next selects one of 54 profile assets: 27 presets × two draw paths. The camera uses the same field, seed, fixed angle, route, and simulation time in each comparison.
 4. Start a sustained run. The first 300 seconds warm the selected configuration while moving through the field. Measurement then restarts the route at time zero and records 900 seconds. Controls hide during the run.
@@ -31,7 +33,7 @@ Implementation and validation results are recorded here as each stage is complet
 6. Use the dense field switch for a full-density, 150 m stress configuration. Full-field population is **not** visible population: enable diagnostic counters separately to determine the actual submitted blade count at each pose. The intended ~1.5 million visible-blade workload still needs calibration from these counts.
 7. To paint: use the GrassRenderer painting tools, then **Bake Field from Terrain and Painted Mask**. Re-bake after sculpting terrain too. A sculpted field uses texture height; the MathematicalHeight preset only accepts the matching analytic fixture.
 
-The fixture creation menu is idempotent and preserves existing assets. Numeric profile edits update uniforms; changing topology, field identity, draw path, shader assets, or required list capacity rebuilds owned buffers. Field data is shown read-only in its Inspector to avoid changing spacing without rebuilding occupancy and tile bounds.
+The fixture creation menu is idempotent and preserves existing assets. Numeric profile edits update uniforms; changing topology replaces meshes, changing shader assets replaces materials, and changing field/profile identity, draw path or growing list capacity rebuilds owned buffers. Field data is shown read-only in its Inspector to avoid changing spacing without rebuilding occupancy and tile bounds.
 
 ## Rendering paths
 
@@ -67,7 +69,7 @@ At 0.067 m spacing, storage replaces the old 24-byte record per potential blade 
 
 ## Compiled experiments
 
-The preset keyword is one mutually exclusive local set, avoiding an exponential cross-product of unrelated switches. Geometry, field, LOD distances, density and camera must stay fixed for a shading A/B. Numeric AO weights deliberately allow linear, squared and smoothstep blends without multiplying compiled modes.
+Independent algorithm dropdowns now generate a specialized shader trio per actual combination. Recipes populate these controls; they do not prevent combinations. Geometry, field, LOD distances, density and camera must stay fixed for a shading A/B. Numeric AO weights deliberately allow linear, squared and smoothstep blends without multiplying compiled modes.
 
 | Concern | Presets / controls |
 | --- | --- |
@@ -84,9 +86,9 @@ The preset keyword is one mutually exclusive local set, avoiding an exponential 
 
 `ReferenceShading` combines selected legacy lighting calculations within the new data/geometry pipeline. For the original complete implementation, use `LegacyReference` in the original scene. It is not valid to describe ReferenceShading as a bit-exact baseline of the starter renderer.
 
-The default LOD0/LOD1 varyings, excluding `SV_POSITION`, are one normal (`half3`) plus blade height/color/dryness (`half3`): **six scalar components across two TEXCOORD registers**. Default LOD2 carries pre-lit `half3` color only. Dual/analytic normal experiments add four scalars; exact view adds world position; legacy fragment hash adds the root position. FloatPrecision changes arithmetic precision. Unused fields are compiled out. Actual registers, instructions and spills require the target shader compiler/GPU capture.
+The default LOD0/LOD1 varyings, excluding `SV_POSITION`, are one normal (`half3`) plus blade height/color/dryness (`half3`): **six scalar components across two TEXCOORD registers**. Default LOD2 carries pre-lit `half3` color only. Dual normals add four scalars; analytic fragment normals add four, plus three for an enabled stabilization target; exact view adds world position; legacy fragment hash adds the root position. FloatPrecision changes arithmetic precision. Unused fields are compiled out. Actual registers, instructions and spills require the target shader compiler/GPU capture.
 
-Shader programs: three LOD files × two paths × 27 presets = **162 declared graphics combinations**, before compiler deduplication and Unity platform processing. Selection has two height variants per kernel. The optimized-release build filter retains only the default preset (six graphics combinations), removes mathematical compute height and prunes the benchmark's selectable profile list accordingly.
+Shader programs: each selected combination generates three specialized LOD shaders, each with two draw-path variants. Matching profiles share shaders. Selection retains two height variants per kernel. Optimized-release retains the benchmark’s explicit Release Profile, or Selected Profile when that field is empty, preserving its independent custom algorithm choices. Generated shaders are included by serialized asset references.
 
 ## Builds and measurements
 
@@ -118,7 +120,8 @@ The CPU/GC marker encloses tile selection, uniform updates, dispatch and draw su
 - Representative field: 5,025,730 occupied cells. Dense field: 7,128,180 occupied cells. Each occupancy map is 907,440 bytes.
 - Android Build Support and all SDK/NDK/JDK dependencies were installed successfully for Unity 6000.6.0f1.
 - All five current C# assemblies compiled successfully using Unity’s bundled Roslyn compiler and the project’s generated reference/define lists, with outputs isolated in `/tmp/grass-compile`. This includes the latest build tools and Editor changes.
-- Full Unity test results, rendering captures, build results and physical S23 measurements are pending. The test launch encountered a native save-scene dialog; Unity also reported a revoked Personal license. Neither is evidence of a grass GPU failure.
+- The updated Unity suite passes 13/13 tests on Metal, covering bit layout, GPU selection/overflow, combined shader choices, recipe migration and buffer preservation. See `Logs/GrassValidation/EditMode.xml`.
+- Live scene captures and short diagnostic reports are under `Logs/GrassValidation/`. See the current validation report for their limits. Physical S23 sustained measurements and a completed Android build are still pending.
 
 ## Known boundaries
 

@@ -1,0 +1,87 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da82f927bcf1e496d9a95a0f429f41fc, type: 3}
+  m_Name: GrassSystem Tuning
+  m_EditorClassIdentifier: Grass.Experimental::GrassFlow.GrassExperimentProfile
+  drawPath: 1
+  preset: 24
+  algorithms:
+    bending: 0
+    wind: 0
+    height: 0
+    normals: 0
+    colorVariation: 0
+    dryness: 0
+    view: 0
+    diffuse: 0
+    ambient: 0
+    transmission: 0
+    specular: 0
+    stabilization: 0
+    farLighting: 1
+    precision: 0
+    ambientOcclusion: 0
+    viewWidening: 0
+  algorithmVersion: 1
+  compiledAlgorithmKey: GRASS_TEST_LOD2FRAGMENT
+  algorithmsReady: 1
+  lod0Shader: {fileID: 4800000, guid: 3f4c39ba039d34519ad60d4b3e408dc4, type: 3}
+  lod1Shader: {fileID: 4800000, guid: 55ca2792113e542bb918fcc1e5f0bdc8, type: 3}
+  lod2Shader: {fileID: 4800000, guid: f99a0d60d8baf4718b048daa0a18f424, type: 3}
+  selectionShader: {fileID: 7200000, guid: c4ad859fb66b54c7cb5a7df5d227db9b, type: 3}
+  lod0Distance: 20
+  lod1Distance: 40
+  maxDrawDistance: 100
+  lod0Segments: 1
+  lod1Segments: 1
+  lod2Segments: 1
+  bladeHeights: {x: 0.39000002, y: 1.3}
+  bladeWidth: 0.06
+  naturalBend: 0.23
+  densityFalloffStart: 10
+  minimumDensity: 0.01
+  widthCompensation: 0
+  maximumWidthScale: 1.5
+  transitionWidth: 3
+  windDirection: {x: 1, y: 0}
+  windStrength: 0.35
+  windSpeed: 0.5
+  gustStrength: 2
+  flutterStrength: 0.04
+  waveA: {x: 0.11, y: 0.07, z: 1.3, w: 0}
+  waveB: {x: -0.055, y: 0.093, z: 0.79, w: 1.8}
+  secondWaveWeight: 0.208
+  gustWave: {x: 0.02, y: 1, z: 0.9, w: 15}
+  stiffnessRange: {x: 0.8, y: 1}
+  patchSizeCells: 32
+  colorPatchWeight: 0.794
+  drynessPatchWeight: 0.192
+  legacyNoiseFrequency: 0.3
+  rootColor: {r: 0.10980389, g: 0.18039212, b: 0.101960756, a: 1}
+  midColor: {r: 0.19607839, g: 0.3490196, b: 0.22745094, a: 1}
+  tipColor: {r: 0.23251152, g: 0.51886785, b: 0.33094653, a: 1}
+  dryColor: {r: 0.39999995, g: 0.34999993, b: 0.14999995, a: 1}
+  skyAmbient: {r: 0.18, g: 0.23, b: 0.3, a: 1}
+  groundAmbient: {r: 0.055, g: 0.07, b: 0.025, a: 1}
+  colorVariation: 0.2
+  dryness: 0.15
+  roundnessRadians: 0.65
+  normalStabilization: {x: 0, y: 0.3, z: 0.75}
+  rootDarkness: 0.4
+  aoCurveWeights: {x: 0, y: 1, z: 0}
+  transmission: 0.5
+  transmissionPower: 3
+  specular: 0.1
+  specularPower: 32
+  widening: 0.15
+  collectCounters: 0
+  counterInterval: 1

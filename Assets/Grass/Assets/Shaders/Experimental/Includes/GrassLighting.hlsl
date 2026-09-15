@@ -6,6 +6,7 @@ float4 _GrassSky, _GrassGround, _GrassSunColor, _GrassSunDirection, _GrassHalfDi
 float4 _GrassColorParams; // variation, dryness, root darkness, specular
 float4 _GrassLightParams; // transmission, legacy transmission exponent, legacy spec exponent, unused
 float4 _GrassAoWeights;
+float4 _GrassPatchParams; // patch cells, color patch blend, dryness patch blend, legacy hash frequency
 
 float GrassLegacyHash(float2 p)
 {
@@ -17,7 +18,7 @@ float GrassLegacyHash(float2 p)
 float GrassPatch(uint2 cell, uint salt)
 {
     // Smooth interpolation avoids square patch borders in lighting/color.
-    float2 p = float2(cell) / 32.0;
+    float2 p = float2(cell) / _GrassPatchParams.x;
     uint2 a = (uint2)floor(p);
     float2 f = frac(p); f = f * f * (3.0 - 2.0 * f);
     uint id = a.y * 65537u + a.x;
@@ -31,11 +32,11 @@ grass_real3 GrassBladeData(uint id, float heightT)
     float blade = GrassRandom(id, 0x7346u);
     float variation = blade;
 #if !defined(GRASS_TEST_BLADECOLOR)
-    variation = GrassPatch(cell, 0x38271u) * 0.8 + blade * 0.2;
+    variation = lerp(blade, GrassPatch(cell, 0x38271u), _GrassPatchParams.y);
 #endif
     float dry = GrassRandom(id, 0x6844u);
 #if !defined(GRASS_TEST_BLADEDRYNESS)
-    dry = GrassPatch(cell, 0x55321u) * 0.85 + dry * 0.15;
+    dry = lerp(dry, GrassPatch(cell, 0x55321u), _GrassPatchParams.z);
 #endif
     dry = saturate((dry - 0.5) * 2.0 + _GrassColorParams.y) * _GrassColorParams.y;
     return grass_real3(heightT, variation, dry);
@@ -47,7 +48,7 @@ grass_real3 GrassShade(grass_real3 N, grass_real3 data, float3 view, float3 root
     grass_real variation = data.y;
     grass_real dryness = data.z;
 #if defined(GRASS_FRAGMENT_HASH)
-    float legacyNoise = GrassLegacyHash(root.xz * 0.3);
+    float legacyNoise = GrassLegacyHash(root.xz * _GrassPatchParams.w);
     #if defined(GRASS_TEST_LEGACYCOLOR) || defined(GRASS_TEST_REFERENCESHADING)
         variation = legacyNoise;
     #endif
@@ -105,7 +106,7 @@ grass_real3 GrassShade(grass_real3 N, grass_real3 data, float3 view, float3 root
     #endif
     grass_real aoT = dot(grass_real3(t, t * t, t * t * (3 - 2 * t)), (grass_real3)_GrassAoWeights.xyz);
     grass_real ao = lerp((grass_real)_GrassColorParams.z, (grass_real)1, aoT);
-    #if defined(GRASS_TEST_REFERENCESHADING)
+    #if defined(GRASS_TEST_REFERENCESHADING) || defined(GRASS_TEST_LEGACYAO)
         ao = lerp((grass_real)1, saturate(t * (grass_real)2 + (grass_real)0.3), (grass_real)(1 - _GrassColorParams.z));
     #endif
     return (baseColor * (ambient + (grass_real3)_GrassSunColor.rgb * (diffuse + transmission)) + specular * (grass_real3)_GrassSunColor.rgb) * ao;

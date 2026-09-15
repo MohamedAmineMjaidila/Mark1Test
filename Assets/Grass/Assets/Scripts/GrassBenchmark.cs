@@ -16,6 +16,8 @@ public sealed class GrassBenchmark : MonoBehaviour
     public Terrain terrain;
     public UniversalRenderPipelineAsset benchmarkPipeline;
     public GrassExperimentProfile[] profiles;
+    [Tooltip("Profile retained by the optimized-release build. If empty, use Selected Profile from the array.")]
+    public GrassExperimentProfile releaseProfile;
     public GrassFieldData representativeField, denseField;
     public bool denseStress;
     public bool captureCounters;
@@ -53,6 +55,9 @@ public sealed class GrassBenchmark : MonoBehaviour
     private RenderPipelineAsset previousPipeline;
     private UniversalRenderPipelineAsset runtimePipeline;
     private GrassExperimentProfile runtimeProfile;
+    private int sourceProfileRevision = -1;
+    private GrassExperimentProfile selectedSourceProfile;
+    public GrassExperimentProfile ActiveRuntimeProfile => runtimeProfile;
     private int previousTargetFps, previousVsync;
     private bool running, initialized;
     private double started;
@@ -75,7 +80,7 @@ public sealed class GrassBenchmark : MonoBehaviour
             runtimePipeline.renderScale = 1;
             QualitySettings.renderPipeline = runtimePipeline;
         }
-        Application.targetFrameRate = 60; QualitySettings.vSyncCount = 0;
+        Application.targetFrameRate = Application.platform == RuntimePlatform.Android ? 60 : -1; QualitySettings.vSyncCount = 0;
         if (benchmarkCamera) benchmarkCamera.allowDynamicResolution = false;
         if (Application.platform == RuntimePlatform.Android)
         {
@@ -95,6 +100,8 @@ public sealed class GrassBenchmark : MonoBehaviour
         selectedProfile = Mathf.Clamp(index, 0, profiles.Length - 1);
         if (runtimeProfile) Destroy(runtimeProfile);
         runtimeProfile = Instantiate(profiles[selectedProfile]); runtimeProfile.name = profiles[selectedProfile].name;
+        selectedSourceProfile = profiles[selectedProfile];
+        sourceProfileRevision = selectedSourceProfile.revision;
         runtimeProfile.collectCounters = captureCounters;
         if (denseStress) { runtimeProfile.minimumDensity = 1; runtimeProfile.maxDrawDistance = 150; }
         grass.SelectExperiment(runtimeProfile);
@@ -126,6 +133,22 @@ public sealed class GrassBenchmark : MonoBehaviour
 
     private void Update()
     {
+        if (profiles != null && profiles.Length > 0)
+        {
+            selectedProfile = Mathf.Clamp(selectedProfile, 0, profiles.Length - 1);
+            var source = profiles[selectedProfile];
+            if (source && source != selectedSourceProfile) SelectProfile(selectedProfile);
+            else if (source && source.revision != sourceProfileRevision)
+            {
+                if (running) EndRun("Stopped for profile edit");
+                // Reuse the runtime object, so numeric edits do not replace resident field buffers.
+                JsonUtility.FromJsonOverwrite(JsonUtility.ToJson(source), runtimeProfile);
+                runtimeProfile.collectCounters = captureCounters;
+                if (denseStress) { runtimeProfile.minimumDensity = 1; runtimeProfile.maxDrawDistance = 150; }
+                runtimeProfile.revision++;
+                sourceProfileRevision = source.revision;
+            }
+        }
         if (!running) return;
         float elapsed = (float)(Time.realtimeSinceStartupAsDouble - started);
         // Measurement route begins at zero after warm-up, independent of compilation/startup duration.
@@ -173,7 +196,7 @@ public sealed class GrassBenchmark : MonoBehaviour
         Array.Sort(frames); Array.Sort(cpus); Array.Sort(gpus, 0, gpuCount);
         var metadata = new RunMetadata { utc = DateTime.UtcNow.ToString("O"), unityVersion = Application.unityVersion, device = SystemInfo.deviceModel,
             gpu = SystemInfo.graphicsDeviceName, graphicsApi = SystemInfo.graphicsDeviceType.ToString(), profile = grass.Experiment.name,
-            drawPath = grass.Experiment.drawPath.ToString(), preset = grass.Experiment.preset.ToString(), field = grass.Field.name, seed = grass.Field.Seed,
+            drawPath = grass.Experiment.drawPath.ToString(), preset = grass.Experiment.algorithms.Key, field = grass.Field.name, seed = grass.Field.Seed,
             completion = completion, width = Screen.width, height = Screen.height, renderScale = runtimePipeline ? runtimePipeline.renderScale : 0,
             warmupSeconds = warmupSeconds, measurementSeconds = measurementSeconds, sampleCount = sampleCount, missingGpuSamples = sampleCount - gpuCount,
             grassBufferBytes = grass.Statistics.bufferBytes, denseStress = denseStress, countersEnabled = captureCounters, maximumGrassGcBytes = maxGc,

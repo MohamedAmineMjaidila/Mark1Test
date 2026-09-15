@@ -6,20 +6,26 @@ float4 _GrassWindDetail; // gust, flutter, time, widening fraction
 float4 _GrassViewDirection;
 float4 _GrassNormal; // cos(roundness), sin(roundness), stabilization, angle
 
+float4 _GrassWaveA, _GrassWaveB, _GrassGustWave, _GrassWaveParams;
+
 struct GrassBendResult { float3 center; float3 tangent; };
 
 float2 GrassWindOffset(float3 root, uint id)
 {
+#if defined(GRASS_TEST_WINDOFF)
+    return 0;
+#else
     float time = _GrassWindDetail.z * _GrassWind.w;
-    float phase = dot(root.xz, float2(0.11, 0.07)) - time * 1.3;
+    float phase = dot(root.xz, _GrassWaveA.xy) - time * _GrassWaveA.z + _GrassWaveA.w;
     float macro = sin(phase);
 #if !defined(GRASS_TEST_ONEWAVE)
-    macro = macro * 0.65 + sin(dot(root.xz, float2(-0.055, 0.093)) - time * 0.79 + 1.8) * 0.35;
+    macro = lerp(macro, sin(dot(root.xz, _GrassWaveB.xy) - time * _GrassWaveB.z + _GrassWaveB.w), _GrassWaveParams.x);
 #endif
-    float gust = 0.5 + 0.5 * sin(dot(root.xz, float2(0.017, 0.023)) - time * 0.37);
-    float flutter = sin(time * 15.0 + GrassRandom(id, 0x85321u) * 6.2831853) * _GrassWindDetail.y;
-    float stiffness = lerp(0.8, 1.0, GrassRandom(id, 0x91623u));
+    float gust = 0.5 + 0.5 * sin(dot(root.xz, _GrassGustWave.xy) - time * _GrassGustWave.z);
+    float flutter = sin(time * _GrassGustWave.w + GrassRandom(id, 0x85321u) * 6.2831853) * _GrassWindDetail.y;
+    float stiffness = lerp(_GrassWaveParams.y, _GrassWaveParams.z, GrassRandom(id, 0x91623u));
     return _GrassWind.xy * ((macro * (1.0 + gust * _GrassWindDetail.x) + flutter) * _GrassWind.z / stiffness);
+#endif
 }
 
 GrassBendResult GrassBend(float t, float height, float2 wind, float3 forward)
@@ -53,11 +59,8 @@ float3 GrassTerrainNormal(float2 local)
     return GrassSafeNormal(float3(-dx, 1, -dz));
 }
 
-float3 GrassStabilize(float3 normal, float3 root, uint id)
+float3 GrassStableTarget(float3 root, uint id)
 {
-#if defined(GRASS_TEST_STABILIZATIONOFF)
-    return normal;
-#else
     float3 stable = float3(0, 1, 0);
     #if defined(GRASS_TEST_STABILIZATIONTERRAIN)
         stable = GrassTerrainNormal(root.xz - _GrassOrigin.xz);
@@ -66,7 +69,15 @@ float3 GrassStabilize(float3 normal, float3 root, uint id)
         uint patch = cell.y * 65537u + cell.x;
         stable = GrassSafeNormal(float3((GrassRandom(patch, 0x72u) - 0.5) * 0.3, 1, (GrassRandom(patch, 0x79u) - 0.5) * 0.3));
     #endif
-    return GrassSafeNormal(lerp(normal, stable, _GrassNormal.z));
+    return stable;
+}
+
+float3 GrassStabilize(float3 normal, float3 root, uint id)
+{
+#if defined(GRASS_TEST_STABILIZATIONOFF)
+    return normal;
+#else
+    return GrassSafeNormal(lerp(normal, GrassStableTarget(root, id), _GrassNormal.z));
 #endif
 }
 #endif

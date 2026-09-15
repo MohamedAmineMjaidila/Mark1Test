@@ -5,7 +5,7 @@ namespace GrassFlow
 {
     public enum GrassDrawPath { CompactedIds, DirectGrid }
 
-    // One mutually exclusive local keyword set, not a cross product of independent switches.
+    // Serialized compatibility and optional starting recipes; actual choices are independent.
     public enum GrassShaderPreset
     {
         Optimized, Bezier, OneWave, MathematicalHeight, FlatNormal, LegacyRoundness,
@@ -19,11 +19,19 @@ namespace GrassFlow
     public sealed class GrassExperimentProfile : ScriptableObject
     {
         public GrassDrawPath drawPath;
-        public GrassShaderPreset preset;
-        public Shader lod0Shader;
-        public Shader lod1Shader;
-        public Shader lod2Shader;
-        public ComputeShader selectionShader;
+        [HideInInspector] public GrassShaderPreset preset;
+        public GrassAlgorithms algorithms;
+        [SerializeField, HideInInspector] private int algorithmVersion;
+        [HideInInspector] public string compiledAlgorithmKey;
+        [HideInInspector] public bool algorithmsReady;
+        public static event Action<GrassExperimentProfile> Validated;
+        public void EnsureAlgorithms() { if (algorithmVersion == 0 || algorithms == null) { algorithms = GrassAlgorithms.FromPreset(preset); algorithmVersion = 1; } }
+        public void ApplyRecipe(GrassShaderPreset recipe) { preset = recipe; algorithmVersion = 1; algorithms = GrassAlgorithms.FromPreset(recipe); NotifyChanged(); }
+        public void NotifyChanged() { algorithmsReady = algorithms != null && compiledAlgorithmKey == algorithms.Key; revision++; Validated?.Invoke(this); }
+        [HideInInspector] public Shader lod0Shader;
+        [HideInInspector] public Shader lod1Shader;
+        [HideInInspector] public Shader lod2Shader;
+        [HideInInspector] public ComputeShader selectionShader;
 
         [Header("Geometry and coverage (freeze during shader A/B)")]
         [Min(0.001f)] public float lod0Distance = 15;
@@ -47,6 +55,17 @@ namespace GrassFlow
         [Min(0)] public float windSpeed = 1;
         [Min(0)] public float gustStrength = 0.35f;
         [Min(0)] public float flutterStrength = 0.04f;
+
+        [Tooltip("Wave direction/frequency in world space (radians per metre), speed multiplier, phase offset.")]
+        public Vector4 waveA = new Vector4(0.11f, 0.07f, 1.3f, 0);
+        public Vector4 waveB = new Vector4(-0.055f, 0.093f, 0.79f, 1.8f);
+        [Range(0, 1)] public float secondWaveWeight = 0.35f;
+        public Vector4 gustWave = new Vector4(0.017f, 0.023f, 0.37f, 15);
+        public Vector2 stiffnessRange = new Vector2(0.8f, 1);
+        [Min(1)] public float patchSizeCells = 32;
+        [Range(0, 1)] public float colorPatchWeight = 0.8f;
+        [Range(0, 1)] public float drynessPatchWeight = 0.85f;
+        [Min(0)] public float legacyNoiseFrequency = 0.3f;
 
         [Header("Shading")]
         public Color rootColor = new Color(0.04f, 0.08f, 0.02f);
@@ -73,7 +92,7 @@ namespace GrassFlow
         [Min(0.25f)] public float counterInterval = 1;
         [NonSerialized] public int revision;
 
-        private void OnValidate() { revision++; }
+        private void OnValidate() { NotifyChanged(); }
 
         public string Keyword => preset == GrassShaderPreset.Optimized ? null : "GRASS_TEST_" + preset.ToString().ToUpperInvariant();
 
@@ -85,7 +104,8 @@ namespace GrassFlow
             else if (bladeHeights.x <= 0 || bladeHeights.y < bladeHeights.x || bladeWidth <= 0 || !float.IsFinite(bladeHeights.y)) error = "Blade dimensions are invalid.";
             else if (minimumDensity <= 0 || minimumDensity > 1 || densityFalloffStart < 0 || densityFalloffStart >= maxDrawDistance) error = "Density range/falloff is invalid.";
             else if (lod0Segments < 1 || lod1Segments < 1 || lod2Segments < 1 || lod0Segments > 15 || lod1Segments > 15 || lod2Segments > 15) error = "LOD segments must be between 1 and 15.";
-            else if (preset == GrassShaderPreset.MathematicalHeight && !field.AnalyticCompatible) error = "Mathematical height requires the matching benchmark terrain fixture. Re-bake sculpted terrain as texture height.";
+            else if (algorithms == null || !algorithmsReady) error = "Algorithm shaders are pending. Select this profile in the Inspector to compile them.";
+            else if (algorithms.height == GrassHeight.MathematicalFixture && !field.AnalyticCompatible) error = "Mathematical height requires the matching benchmark terrain fixture. Re-bake sculpted terrain as texture height.";
             return error == null;
         }
     }

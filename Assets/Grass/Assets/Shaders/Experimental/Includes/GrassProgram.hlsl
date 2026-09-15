@@ -19,6 +19,9 @@ struct GrassVaryings
 {
     float4 positionCS : SV_POSITION;
 #if defined(GRASS_FRAGMENT_LIT)
+    #if defined(GRASS_TEST_ANALYTICROUNDNESS) && !defined(GRASS_TEST_STABILIZATIONOFF)
+        grass_real3 stableTarget : TEXCOORD5;
+    #endif
     grass_real3 normalWS : TEXCOORD0;
     grass_real3 grassData : TEXCOORD1;
     #if defined(GRASS_DUAL_NORMAL) || defined(GRASS_TEST_ANALYTICROUNDNESS)
@@ -77,7 +80,7 @@ GrassVaryings GrassVertex(GrassAttributes input, uint instance : SV_InstanceID)
     position += cameraRight * (widthCoordinate * width * edge * _GrassWindDetail.w * 0.5);
 #endif
     float3 normal = flat;
-#if !defined(GRASS_TEST_FLATNORMAL) && !defined(GRASS_DUAL_NORMAL) && !defined(GRASS_TEST_ANALYTICROUNDNESS)
+#if !defined(GRASS_TEST_FLATNORMAL) && ((!defined(GRASS_DUAL_NORMAL) && !defined(GRASS_TEST_ANALYTICROUNDNESS)) || !defined(GRASS_FRAGMENT_LIT))
     normal = GrassSafeNormal(flat * _GrassNormal.x + side * (widthCoordinate * _GrassNormal.y));
 #endif
     normal = GrassStabilize(normal, root, id);
@@ -94,6 +97,9 @@ GrassVaryings GrassVertex(GrassAttributes input, uint instance : SV_InstanceID)
     #elif defined(GRASS_TEST_ANALYTICROUNDNESS)
         output.normalWS = (grass_real3)flat;
         output.normalFrame = grass_real4(side, widthCoordinate);
+        #if !defined(GRASS_TEST_STABILIZATIONOFF)
+            output.stableTarget = (grass_real3)GrassStableTarget(root, id);
+        #endif
     #endif
     #if defined(GRASS_EXACT_VIEW)
         output.positionWS = position;
@@ -102,7 +108,11 @@ GrassVaryings GrassVertex(GrassAttributes input, uint instance : SV_InstanceID)
         output.rootWS = root;
     #endif
 #else
-    output.color = GrassShade((grass_real3)normal, data, _GrassViewDirection.xyz, root);
+    float3 vertexView = _GrassViewDirection.xyz;
+    #if defined(GRASS_EXACT_VIEW)
+        vertexView = GrassSafeNormal(_GrassCamera.xyz - position);
+    #endif
+    output.color = GrassShade((grass_real3)normal, data, vertexView, root);
 #endif
     return output;
 }
@@ -116,7 +126,9 @@ half4 GrassFragment(GrassVaryings input) : SV_Target
     #elif defined(GRASS_TEST_ANALYTICROUNDNESS)
         float angle = input.normalFrame.w * _GrassNormal.w;
         normal = normal * cos(angle) + input.normalFrame.xyz * sin(angle);
-        normal = lerp(normal, grass_real3(0, 1, 0), (grass_real)_GrassNormal.z);
+        #if !defined(GRASS_TEST_STABILIZATIONOFF)
+            normal = lerp(normal, input.stableTarget, (grass_real)_GrassNormal.z);
+        #endif
     #endif
     normal = normalize(normal);
     float3 view = _GrassViewDirection.xyz;

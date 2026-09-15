@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using Unity.Profiling;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -47,7 +46,7 @@ namespace GrassFlow
         private readonly int selectKernel, argsKernel;
         private readonly Action<AsyncGPUReadbackRequest> onCounters;
         private int profileRevision = -1;
-        private GrassShaderPreset activePreset = (GrassShaderPreset)(-1);
+
         private bool disposed, counterPending;
         private float nextCounterTime;
         private GrassRenderStatistics stats;
@@ -102,7 +101,7 @@ namespace GrassFlow
                 compute.SetBuffer(selectKernel, Ids.Tiles, tiles);
                 compute.SetBuffer(selectKernel, "_GrassCounters", counters);
                 compute.SetBuffer(argsKernel, "_GrassCounters", counters);
-                compute.SetInt("_GrassArgumentInstanceOffset", (int)Marshal.OffsetOf<GraphicsBuffer.IndirectDrawIndexedArgs>(nameof(GraphicsBuffer.IndirectDrawIndexedArgs.instanceCount)));
+                compute.SetInt("_GrassArgumentInstanceOffset", GrassIndirectLayout.InstanceCountOffset);
                 ApplyProfile();
             }
             catch { Dispose(); throw; }
@@ -118,23 +117,29 @@ namespace GrassFlow
         public bool NeedsRebuild(GrassFieldData newField, GrassExperimentProfile newProfile)
         {
             if (disposed || newField != field || newProfile != profile || field.Revision != fieldRevision || profile.drawPath != path || sourceCompute != profile.selectionShader) return true;
-            return shaders[0] != profile.lod0Shader || shaders[1] != profile.lod1Shader || shaders[2] != profile.lod2Shader ||
-                segments[0] != profile.lod0Segments || segments[1] != profile.lod1Segments || segments[2] != profile.lod2Segments ||
-                capacities[0] < RequiredCapacity(0) || capacities[1] < RequiredCapacity(1) || capacities[2] < RequiredCapacity(2);
+            return path == GrassDrawPath.CompactedIds && (capacities[0] < RequiredCapacity(0) || capacities[1] < RequiredCapacity(1) || capacities[2] < RequiredCapacity(2));
         }
 
         private void ApplyProfile()
         {
-            if (activePreset != profile.preset)
+            if (profile.algorithms.height == GrassHeight.MathematicalFixture) compute.EnableKeyword("GRASS_MATH_HEIGHT");
+            else compute.DisableKeyword("GRASS_MATH_HEIGHT");
+            for (int lod = 0; lod < 3; lod++)
             {
-                foreach (Material material in materials)
+                Shader shader = lod == 0 ? profile.lod0Shader : lod == 1 ? profile.lod1Shader : profile.lod2Shader;
+                int count = lod == 0 ? profile.lod0Segments : lod == 1 ? profile.lod1Segments : profile.lod2Segments;
+                if (shaders[lod] != shader)
                 {
-                    if ((int)activePreset > 0) material.DisableKeyword("GRASS_TEST_" + activePreset.ToString().ToUpperInvariant());
-                    if (profile.Keyword != null) material.EnableKeyword(profile.Keyword);
+                    DestroyOwned(materials[lod]); shaders[lod] = shader;
+                    materials[lod] = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+                    if (path == GrassDrawPath.DirectGrid) materials[lod].EnableKeyword("GRASS_DIRECT_GRID");
                 }
-                if (profile.preset == GrassShaderPreset.MathematicalHeight) compute.EnableKeyword("GRASS_MATH_HEIGHT");
-                else compute.DisableKeyword("GRASS_MATH_HEIGHT");
-                activePreset = profile.preset;
+                if (segments[lod] != count)
+                {
+                    DestroyOwned(meshes[lod]); segments[lod] = count; meshes[lod] = GrassBladeMesh.Create(count);
+                    argumentData[lod][0].indexCountPerInstance = meshes[lod].GetIndexCount(0);
+                    arguments[lod].SetData(argumentData[lod]);
+                }
             }
             Vector4 terrainSize = new Vector4(field.TerrainSize.x, field.TerrainSize.y, field.TerrainSize.z, field.CellSpacing);
             Vector4 heightSize = new Vector4(field.HeightTexture.width, field.HeightTexture.height, 1f / field.HeightTexture.width, 1f / field.HeightTexture.height);
@@ -160,6 +165,10 @@ namespace GrassFlow
                 p.SetVector(Ids.ColorParams, new Vector4(profile.colorVariation, profile.dryness, profile.rootDarkness, profile.specular));
                 p.SetVector(Ids.LightParams, new Vector4(profile.transmission, profile.transmissionPower, profile.specularPower, 0));
                 p.SetVector(Ids.Ao, ao);
+                p.SetVector("_GrassWaveA", profile.waveA); p.SetVector("_GrassWaveB", profile.waveB);
+                p.SetVector("_GrassGustWave", profile.gustWave);
+                p.SetVector("_GrassWaveParams", new Vector4(profile.secondWaveWeight, Mathf.Max(0.05f, profile.stiffnessRange.x), Mathf.Max(0.05f, profile.stiffnessRange.y), 0));
+                p.SetVector("_GrassPatchParams", new Vector4(Mathf.Max(1, profile.patchSizeCells), profile.colorPatchWeight, profile.drynessPatchWeight, profile.legacyNoiseFrequency));
             }
             compute.SetInt(Ids.Columns, field.Columns); compute.SetInt(Ids.Rows, field.Rows);
             compute.SetInt(Ids.WordsPerRow, GrassGrid.WordsPerRow(field.Columns)); compute.SetInt(Ids.TileColumns, field.TileColumns); compute.SetInt(Ids.Seed, field.Seed);
@@ -178,7 +187,7 @@ namespace GrassFlow
             {
                 long started = Stopwatch.GetTimestamp();
                 long allocated = GC.GetAllocatedBytesForCurrentThread();
-                if (profileRevision != profile.revision || activePreset != profile.preset) ApplyProfile();
+                if (profileRevision != profile.revision) ApplyProfile();
                 GeometryUtility.CalculateFrustumPlanes(camera, planes);
                 for (int i = 0; i < 6; i++) frustum[i] = new Vector4(planes[i].normal.x, planes[i].normal.y, planes[i].normal.z, planes[i].distance);
                 Vector3 cameraPosition = camera.transform.position;

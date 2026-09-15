@@ -15,6 +15,8 @@ public class GrassRenderer : MonoBehaviour
     [SerializeField] private GrassFieldData fieldData;
     [SerializeField] private GrassExperimentProfile experimentProfile;
     [SerializeField] private Light grassSun;
+    [Min(0.01f)] public float bakeCellSpacing = 0.067f;
+    public int bakeSeed = 1729;
     private GrassFieldRenderer fieldRenderer;
     private Material legacyMaterial;
     private Mesh ownedLegacy0, ownedLegacy1, ownedLegacy2;
@@ -112,9 +114,6 @@ public class GrassRenderer : MonoBehaviour
 
     [Header("Debug")]
     [SerializeField] private bool showDebugUI = false;
-    private uint[] debugArgsLOD0 = new uint[5];
-    private uint[] debugArgsLOD1 = new uint[5];
-    private uint[] debugArgsLOD2 = new uint[5];
     private int visibleCountLOD0;
     private int visibleCountLOD1;
     private int visibleCountLOD2;
@@ -644,6 +643,7 @@ public class GrassRenderer : MonoBehaviour
 
     private void RenderField()
     {
+        if (experimentProfile && !experimentProfile.algorithmsReady) return;
         string error = null;
         if (!fieldData || !experimentProfile) error = "Assign a baked field and experiment profile.";
         else if (!SystemInfo.supportsComputeShaders || !SystemInfo.supportsInstancing) error = "The experimental renderer requires compute shaders and instancing.";
@@ -657,12 +657,13 @@ public class GrassRenderer : MonoBehaviour
             return;
         }
         lastConfigurationError = null;
-        if (needsUpdate || fieldRenderer == null || fieldRenderer.NeedsRebuild(fieldData, experimentProfile))
+        if (fieldRenderer == null || fieldRenderer.NeedsRebuild(fieldData, experimentProfile))
         {
             fieldRenderer?.Dispose(); fieldRenderer = null;
             needsUpdate = false;
             fieldRenderer = new GrassFieldRenderer(fieldData, experimentProfile);
         }
+        needsUpdate = false;
         fieldRenderer.Render(mainCamera, terrain ? terrain.transform.position : transform.position,
             grassSun ? grassSun : RenderSettings.sun, useBenchmarkTime ? benchmarkTime : Time.time);
     }
@@ -739,6 +740,18 @@ public class GrassRenderer : MonoBehaviour
     private void OnGUI()
     {
         if (!showDebugUI) return;
+        if (renderingMode == RenderingMode.ImmutableField)
+        {
+            GUILayout.BeginArea(new Rect(10, 10, 380, 180), GUI.skin.box);
+            GUILayout.Label("GrassFlow · Immutable Field · " + (experimentProfile ? experimentProfile.drawPath.ToString() : "No profile"));
+            GUILayout.Label("Profile: " + (experimentProfile ? experimentProfile.name : "None"));
+            var stats = Statistics;
+            GUILayout.Label($"Occupied cells: {(fieldData ? fieldData.OccupiedCount : 0):N0} · candidate tiles: {stats.candidateTiles:N0}");
+            GUILayout.Label($"GPU buffers: {stats.bufferBytes / 1048576f:F2} MiB · submit CPU: {stats.cpuMilliseconds:F3} ms");
+            GUILayout.Label(stats.countersValid ? $"LOD visible: {stats.lod0:N0} / {stats.lod1:N0} / {stats.lod2:N0} · overflow: {stats.overflow}" : "Visible counters disabled or pending (never a zero count).");
+            GUILayout.EndArea();
+            return;
+        }
 
         GUILayout.BeginArea(new Rect(10, 10, 350, 600), GUI.skin.box);
         GUILayout.Label("Grass Renderer Debug", GUI.skin.button);

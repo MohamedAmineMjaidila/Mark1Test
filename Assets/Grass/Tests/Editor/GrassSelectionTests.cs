@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -45,7 +44,7 @@ namespace GrassFlow.Tests
                     shader.SetBuffer(finalize, "_GrassArgs" + lod, args[lod]);
                     shader.SetInt("_GrassCapacity" + lod, capacity);
                 }
-                shader.SetInt("_GrassArgumentInstanceOffset", (int)Marshal.OffsetOf<GraphicsBuffer.IndirectDrawIndexedArgs>(nameof(GraphicsBuffer.IndirectDrawIndexedArgs.instanceCount)));
+                shader.SetInt("_GrassArgumentInstanceOffset", GrassIndirectLayout.InstanceCountOffset);
                 shader.SetBuffer(select, "_GrassOccupancy", occupancy); shader.SetBuffer(select, "_GrassTiles", tiles);
                 shader.SetBuffer(select, "_GrassCounters", counters); shader.SetBuffer(finalize, "_GrassCounters", counters);
                 shader.SetTexture(select, "_GrassHeights", height);
@@ -76,7 +75,7 @@ namespace GrassFlow.Tests
                     Assert.That(counts[lod], Is.EqualTo(expected[lod].Count));
                     uint[] argumentValues = new uint[GraphicsBuffer.IndirectDrawIndexedArgs.size / 4]; args[lod].GetData(argumentValues);
                     Assert.That(argumentValues[0], Is.EqualTo(3));
-                    Assert.That(argumentValues[1], Is.EqualTo(Math.Min(capacity, expected[lod].Count)));
+                    Assert.That(argumentValues[GrassIndirectLayout.InstanceCountOffset / sizeof(uint)], Is.EqualTo(Math.Min(capacity, expected[lod].Count)));
                     if (!forceOverflow)
                     {
                         uint[] ids = new uint[counts[lod]]; visible[lod].GetData(ids, 0, 0, ids.Length);

@@ -339,6 +339,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6397ded32036645eda9c89eab8dedc1d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GrassRenderer
+  renderingMode: 1
+  fieldData: {fileID: 11400000, guid: 637cb3d5940de4231990f2e1d5b7e868, type: 2}
+  experimentProfile: {fileID: 11400000, guid: 17a008329f5a2483ca9ca8677c8faba0, type: 2}
+  grassSun: {fileID: 410087040}
+  bakeCellSpacing: 0.057142857
+  bakeSeed: 1729
   customGrassMesh: {fileID: 0}
   grassCount: 20164
   terrainSize: 70
@@ -373,7 +379,7 @@ MonoBehaviour:
   occlusionBias: 0.1
   mainCamera: {fileID: 1634573640}
   renderInEditMode: 1
-  showDebugUI: 1
+  showDebugUI: 0
   densityMap: {fileID: 2800000, guid: 324e8111093204321b06d85d5b61ee60, type: 3}
   densityThreshold: 0.1
 --- !u!1 &1287080603

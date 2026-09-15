@@ -79,9 +79,8 @@ public sealed class GrassShaderBuildFilter : IPreprocessShaders, IPreprocessComp
     }
     public void OnProcessComputeShader(ComputeShader shader, string kernel, IList<ShaderCompilerData> data)
     {
-        if (!GrassBenchmarkBuild.StripExperiments || shader.name != "GrassSelect") return;
-        for (int i = data.Count - 1; i >= 0; i--)
-            if (data[i].shaderKeywordSet.GetShaderKeywords().Any(keyword => keyword.name == "GRASS_MATH_HEIGHT")) data.RemoveAt(i);
+        // Both height backends remain available to the selected release profile.
+
     }
     public void OnProcessScene(Scene scene, BuildReport report)
     {
@@ -89,7 +88,12 @@ public sealed class GrassShaderBuildFilter : IPreprocessShaders, IPreprocessComp
         foreach (var root in scene.GetRootGameObjects())
             foreach (var benchmark in root.GetComponentsInChildren<GrassBenchmark>(true))
             {
-                benchmark.profiles = benchmark.profiles.Where(profile => profile.preset == GrassShaderPreset.Optimized).ToArray();
+                var chosen = benchmark.releaseProfile;
+                if (!chosen && benchmark.profiles != null && benchmark.profiles.Length > 0)
+                    chosen = benchmark.profiles[Mathf.Clamp(benchmark.selectedProfile, 0, benchmark.profiles.Length - 1)];
+                if (!chosen) throw new BuildFailedException("Assign a Release Profile or a valid Selected Profile on GrassBenchmark.");
+                benchmark.profiles = new[] { chosen };
+                benchmark.releaseProfile = chosen;
                 benchmark.selectedProfile = 0;
             }
     }
