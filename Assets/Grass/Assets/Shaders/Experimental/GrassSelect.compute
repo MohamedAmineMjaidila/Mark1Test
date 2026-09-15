@@ -1,0 +1,62 @@
+#pragma kernel SelectTiles
+#pragma kernel BuildArguments
+#pragma multi_compile_local _ GRASS_MATH_HEIGHT
+#include "Includes/GrassField.hlsl"
+
+RWStructuredBuffer<uint> _GrassVisible0;
+RWStructuredBuffer<uint> _GrassVisible1;
+RWStructuredBuffer<uint> _GrassVisible2;
+RWStructuredBuffer<uint> _GrassCounters; // three attempted counts + overflow count
+RWByteAddressBuffer _GrassArgs0;
+RWByteAddressBuffer _GrassArgs1;
+RWByteAddressBuffer _GrassArgs2;
+int _GrassCapacity0, _GrassCapacity1, _GrassCapacity2;
+int _GrassArgumentInstanceOffset;
+groupshared uint groupCounts[3];
+groupshared uint groupOffsets[3];
+
+[numthreads(256, 1, 1)]
+void SelectTiles(uint3 group : SV_GroupID, uint lane : SV_GroupIndex)
+{
+    uint tile = _GrassTiles[group.x];
+    [unroll] for (uint batch = 0; batch < 4; batch++)
+    {
+        if (lane < 3) groupCounts[lane] = 0;
+        GroupMemoryBarrierWithGroupSync();
+        uint2 cell = GrassTileCell(tile, lane + batch * 256u);
+        uint id = cell.y * (uint)_GrassColumns + cell.x;
+        float3 root;
+        int lod = GrassSelect(cell, id, root);
+        uint rank = 0;
+        if (lod >= 0) InterlockedAdd(groupCounts[lod], 1u, rank);
+        GroupMemoryBarrierWithGroupSync();
+        if (lane < 3)
+        {
+            groupOffsets[lane] = 0;
+            if (groupCounts[lane] > 0) InterlockedAdd(_GrassCounters[lane], groupCounts[lane], groupOffsets[lane]);
+        }
+        GroupMemoryBarrierWithGroupSync();
+        if (lod >= 0)
+        {
+            uint index = groupOffsets[lod] + rank;
+            uint capacity = lod == 0 ? _GrassCapacity0 : lod == 1 ? _GrassCapacity1 : _GrassCapacity2;
+            if (index < capacity)
+            {
+                if (lod == 0) _GrassVisible0[index] = id;
+                else if (lod == 1) _GrassVisible1[index] = id;
+                else _GrassVisible2[index] = id;
+            }
+            else InterlockedAdd(_GrassCounters[3], 1u);
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+}
+
+[numthreads(1, 1, 1)]
+void BuildArguments(uint3 id : SV_DispatchThreadID)
+{
+    // The CPU derives this offset from IndirectDrawIndexedArgs instead of assuming its platform layout.
+    _GrassArgs0.Store(_GrassArgumentInstanceOffset, min(_GrassCounters[0], (uint)_GrassCapacity0));
+    _GrassArgs1.Store(_GrassArgumentInstanceOffset, min(_GrassCounters[1], (uint)_GrassCapacity1));
+    _GrassArgs2.Store(_GrassArgumentInstanceOffset, min(_GrassCounters[2], (uint)_GrassCapacity2));
+}

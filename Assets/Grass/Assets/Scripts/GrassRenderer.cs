@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.Rendering;
+using GrassFlow;
 
 /// <summary>
 /// GPU Instanced Grass Renderer
@@ -7,6 +9,52 @@ using UnityEngine;
 [ExecuteAlways]
 public class GrassRenderer : MonoBehaviour
 {
+    public enum RenderingMode { LegacyReference, ImmutableField }
+    [Header("Experimental renderer")]
+    [SerializeField] private RenderingMode renderingMode;
+    [SerializeField] private GrassFieldData fieldData;
+    [SerializeField] private GrassExperimentProfile experimentProfile;
+    [SerializeField] private Light grassSun;
+    private GrassFieldRenderer fieldRenderer;
+    private Material legacyMaterial;
+    private Mesh ownedLegacy0, ownedLegacy1, ownedLegacy2;
+    private System.Action<AsyncGPUReadbackRequest>[] legacyReadbacks;
+    private int legacyReadbacksPending;
+    private float nextLegacyReadback;
+    private string lastConfigurationError;
+    [System.NonSerialized] public bool useBenchmarkTime;
+    [System.NonSerialized] public float benchmarkTime;
+    public GrassFieldData Field => fieldData;
+    public GrassExperimentProfile Experiment => experimentProfile;
+    public RenderingMode Mode => renderingMode;
+    public Camera RenderingCamera => mainCamera;
+    public GrassRenderStatistics Statistics => fieldRenderer != null ? fieldRenderer.Statistics : default;
+
+    public void ConfigureExperimental(GrassFieldData field, GrassExperimentProfile profile, Camera camera, Terrain sourceTerrain, Light sun)
+    {
+        fieldData = field; experimentProfile = profile; mainCamera = camera; terrain = sourceTerrain; grassSun = sun;
+        renderingMode = RenderingMode.ImmutableField; needsUpdate = true;
+    }
+
+    public void SelectExperiment(GrassExperimentProfile profile)
+    {
+        experimentProfile = profile; renderingMode = RenderingMode.ImmutableField;
+    }
+
+    public void SelectField(GrassFieldData field) { fieldData = field; }
+
+    public void SelectLegacyReference()
+    {
+        renderingMode = RenderingMode.LegacyReference; needsUpdate = true;
+    }
+
+    private void OnEnable()
+    {
+        needsUpdate = true;
+        legacyReadbacks = new System.Action<AsyncGPUReadbackRequest>[] {
+            request => ReceiveLegacyCounter(request, 0), request => ReceiveLegacyCounter(request, 1), request => ReceiveLegacyCounter(request, 2) };
+    }
+
     [Header("Grass Settings")]
     [SerializeField] private Mesh customGrassMesh;
     [SerializeField] private int grassCount = 1000000; // 1 million grass blades
@@ -70,7 +118,6 @@ public class GrassRenderer : MonoBehaviour
     private int visibleCountLOD0;
     private int visibleCountLOD1;
     private int visibleCountLOD2;
-    private bool hasLoggedCullingDiagnostics;
 
     [Header("Painting")]
     [SerializeField] public Texture2D densityMap;
@@ -119,7 +166,7 @@ public class GrassRenderer : MonoBehaviour
         needsUpdate = true;
     }
 
-    private void Start()
+    private void InitializeLegacy()
     {
         if (mainCamera == null) mainCamera = Camera.main;
 
@@ -130,6 +177,7 @@ public class GrassRenderer : MonoBehaviour
             enabled = false;
             return;
         }
+        legacyMaterial = new Material(grassMaterial) { hideFlags = HideFlags.HideAndDontSave };
         // Create grass mesh
         UpdateMeshes();
 
@@ -147,9 +195,9 @@ public class GrassRenderer : MonoBehaviour
         }
         else
         {
-            grassMeshLOD0 = CreateGrassBladeMesh(lod0Segments);
-            grassMeshLOD1 = CreateGrassBladeMesh(lod1Segments);
-            grassMeshLOD2 = CreateGrassBladeMesh(lod2Segments);
+            grassMeshLOD0 = ownedLegacy0 = CreateGrassBladeMesh(lod0Segments);
+            grassMeshLOD1 = ownedLegacy1 = CreateGrassBladeMesh(lod1Segments);
+            grassMeshLOD2 = ownedLegacy2 = CreateGrassBladeMesh(lod2Segments);
         }
     }
 
@@ -259,8 +307,8 @@ public class GrassRenderer : MonoBehaviour
         computeShader.Dispatch(kernelIndex, threadGroups, 1, 1);
 
         // Set material buffer (initially source, but will be overridden by culling)
-        grassMaterial.SetBuffer("_GrassDataBuffer", sourceGrassBuffer);
-        grassMaterial.SetFloat("_WindDisableDistance", windDisableDistance);
+        legacyMaterial.SetBuffer("_GrassDataBuffer", sourceGrassBuffer);
+        legacyMaterial.SetFloat("_WindDisableDistance", windDisableDistance);
         
         Debug.Log($"Compute shader dispatched with {threadGroups} thread groups");
     }
@@ -324,23 +372,27 @@ public class GrassRenderer : MonoBehaviour
         }
     }
 
-    private void Update()
+    private void LateUpdate()
     {
-        // Edit Mode Rendering Check
         if (!Application.isPlaying && !renderInEditMode) return;
-
-        if (needsUpdate && sourceGrassBuffer != null)
+        if (mainCamera == null) mainCamera = Camera.main;
+        if (mainCamera == null || !mainCamera.isActiveAndEnabled) return;
+        if (renderingMode == RenderingMode.ImmutableField)
+        {
+            if (sourceGrassBuffer != null) ReleaseLegacy();
+            RenderField();
+            return;
+        }
+        if (fieldRenderer != null) { fieldRenderer.Dispose(); fieldRenderer = null; }
+        if (sourceGrassBuffer == null || needsUpdate)
         {
             needsUpdate = false;
-            UpdateMeshes();
-            DispatchComputeShader();
+            ReleaseLegacy();
+            InitializeLegacy();
         }
-        
-        // Update material properties every frame
-        grassMaterial.SetFloat("_WindDisableDistance", windDisableDistance);
-        grassMaterial.SetFloat("_CameraFacing", cameraFacing);
-
-        if (sourceGrassBuffer == null || argsBufferLOD0 == null || culledGrassBufferLOD0 == null) return;
+        if (sourceGrassBuffer == null || legacyMaterial == null) return;
+        legacyMaterial.SetFloat("_WindDisableDistance", windDisableDistance);
+        legacyMaterial.SetFloat("_CameraFacing", cameraFacing);
 
         // 1. Frustum Culling
         // Reset counters
@@ -436,26 +488,14 @@ public class GrassRenderer : MonoBehaviour
         ComputeBuffer.CopyCount(culledGrassBufferLOD1, argsBufferLOD1, 4);
         ComputeBuffer.CopyCount(culledGrassBufferLOD2, argsBufferLOD2, 4);
 
-        // Debug Readback (Warning: Causes GPU stall, only use for debugging)
-        if (showDebugUI || !hasLoggedCullingDiagnostics)
+        // Diagnostics never block the CPU waiting for the GPU.
+        if (showDebugUI && SystemInfo.supportsAsyncGPUReadback && legacyReadbacksPending == 0 && Time.realtimeSinceStartup >= nextLegacyReadback)
         {
-            argsBufferLOD0.GetData(debugArgsLOD0);
-            argsBufferLOD1.GetData(debugArgsLOD1);
-            argsBufferLOD2.GetData(debugArgsLOD2);
-            visibleCountLOD0 = (int)debugArgsLOD0[1];
-            visibleCountLOD1 = (int)debugArgsLOD1[1];
-            visibleCountLOD2 = (int)debugArgsLOD2[1];
-
-            if (!hasLoggedCullingDiagnostics)
-            {
-                int totalVisible = visibleCountLOD0 + visibleCountLOD1 + visibleCountLOD2;
-                string cameraName = mainCamera != null ? mainCamera.name : "<null>";
-                Debug.Log(
-                    $"Grass diagnostics: camera={cameraName}, enabled={mainCamera != null && mainCamera.enabled}, " +
-                    $"visible={totalVisible} (LOD0={visibleCountLOD0}, LOD1={visibleCountLOD1}, LOD2={visibleCountLOD2}), " +
-                    $"occlusion={canUseOcclusion}, depth={(depthTexture != null ? depthTexture.name : "<null>")}");
-                hasLoggedCullingDiagnostics = true;
-            }
+            legacyReadbacksPending = 3;
+            nextLegacyReadback = Time.realtimeSinceStartup + 1f;
+            AsyncGPUReadback.Request(argsBufferLOD0, legacyReadbacks[0]);
+            AsyncGPUReadback.Request(argsBufferLOD1, legacyReadbacks[1]);
+            AsyncGPUReadback.Request(argsBufferLOD2, legacyReadbacks[2]);
         }
 
         // Initialize MaterialPropertyBlocks if needed
@@ -469,7 +509,7 @@ public class GrassRenderer : MonoBehaviour
         Graphics.DrawMeshInstancedIndirect(
             grassMeshLOD0,
             0,
-            grassMaterial,
+            legacyMaterial,
             renderBounds,
             argsBufferLOD0,
             0,
@@ -477,7 +517,7 @@ public class GrassRenderer : MonoBehaviour
             castShadows ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off,
             receiveShadows,
             0,
-            null
+            mainCamera
         );
 
         // 3. Render LOD1 (Medium Quality)
@@ -485,7 +525,7 @@ public class GrassRenderer : MonoBehaviour
         Graphics.DrawMeshInstancedIndirect(
             grassMeshLOD1,
             0,
-            grassMaterial,
+            legacyMaterial,
             renderBounds,
             argsBufferLOD1,
             0,
@@ -493,7 +533,7 @@ public class GrassRenderer : MonoBehaviour
             (castShadows && castShadowsLOD1) ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off,
             receiveShadows,
             0,
-            null
+            mainCamera
         );
 
         // 4. Render LOD2 (Low Quality)
@@ -501,7 +541,7 @@ public class GrassRenderer : MonoBehaviour
         Graphics.DrawMeshInstancedIndirect(
             grassMeshLOD2,
             0,
-            grassMaterial,
+            legacyMaterial,
             renderBounds,
             argsBufferLOD2,
             0,
@@ -509,7 +549,7 @@ public class GrassRenderer : MonoBehaviour
             (castShadows && castShadowsLOD2) ? UnityEngine.Rendering.ShadowCastingMode.On : UnityEngine.Rendering.ShadowCastingMode.Off,
             receiveShadows,
             0,
-            null
+            mainCamera
         );
     }
 
@@ -602,40 +642,72 @@ public class GrassRenderer : MonoBehaviour
         return mesh;
     }
 
-    private void OnDestroy()
+    private void RenderField()
     {
-        // Clean up compute buffers
-        sourceGrassBuffer?.Release();
-        culledGrassBufferLOD0?.Release();
-        culledGrassBufferLOD1?.Release();
-        culledGrassBufferLOD2?.Release();
-        argsBufferLOD0?.Release();
-        argsBufferLOD1?.Release();
-        argsBufferLOD2?.Release();
-        if (hizTexture != null) hizTexture.Release();
+        string error = null;
+        if (!fieldData || !experimentProfile) error = "Assign a baked field and experiment profile.";
+        else if (!SystemInfo.supportsComputeShaders || !SystemInfo.supportsInstancing) error = "The experimental renderer requires compute shaders and instancing.";
+        else if (!fieldData.IsValid(out error)) { }
+        else experimentProfile.IsValid(fieldData, out error);
+        if (error != null)
+        {
+            if (error != lastConfigurationError) Debug.LogWarning("GrassFlow: " + error, this);
+            lastConfigurationError = error;
+            fieldRenderer?.Dispose(); fieldRenderer = null;
+            return;
+        }
+        lastConfigurationError = null;
+        if (needsUpdate || fieldRenderer == null || fieldRenderer.NeedsRebuild(fieldData, experimentProfile))
+        {
+            fieldRenderer?.Dispose(); fieldRenderer = null;
+            needsUpdate = false;
+            fieldRenderer = new GrassFieldRenderer(fieldData, experimentProfile);
+        }
+        fieldRenderer.Render(mainCamera, terrain ? terrain.transform.position : transform.position,
+            grassSun ? grassSun : RenderSettings.sun, useBenchmarkTime ? benchmarkTime : Time.time);
+    }
+
+    private void ReceiveLegacyCounter(AsyncGPUReadbackRequest request, int lod)
+    {
+        legacyReadbacksPending = Mathf.Max(0, legacyReadbacksPending - 1);
+        if (!this || request.hasError || sourceGrassBuffer == null) return;
+        int count = (int)request.GetData<uint>()[1];
+        if (lod == 0) visibleCountLOD0 = count;
+        else if (lod == 1) visibleCountLOD1 = count;
+        else visibleCountLOD2 = count;
+    }
+
+    private void ReleaseLegacy()
+    {
+        sourceGrassBuffer?.Release(); sourceGrassBuffer = null;
+        culledGrassBufferLOD0?.Release(); culledGrassBufferLOD0 = null;
+        culledGrassBufferLOD1?.Release(); culledGrassBufferLOD1 = null;
+        culledGrassBufferLOD2?.Release(); culledGrassBufferLOD2 = null;
+        argsBufferLOD0?.Release(); argsBufferLOD0 = null;
+        argsBufferLOD1?.Release(); argsBufferLOD1 = null;
+        argsBufferLOD2?.Release(); argsBufferLOD2 = null;
+        if (hizTexture != null) { hizTexture.Release(); DestroyOwned(hizTexture); hizTexture = null; }
+        DestroyOwned(ownedLegacy0); DestroyOwned(ownedLegacy1); DestroyOwned(ownedLegacy2);
+        ownedLegacy0 = ownedLegacy1 = ownedLegacy2 = null;
+        grassMeshLOD0 = grassMeshLOD1 = grassMeshLOD2 = null;
+        DestroyOwned(legacyMaterial); legacyMaterial = null;
+    }
+
+    private static void DestroyOwned(Object resource)
+    {
+        if (!resource) return;
+        if (Application.isPlaying) Destroy(resource); else DestroyImmediate(resource);
     }
 
     private void OnDisable()
     {
-        // Clean up compute buffers
-        sourceGrassBuffer?.Release();
-        culledGrassBufferLOD0?.Release();
-        culledGrassBufferLOD1?.Release();
-        culledGrassBufferLOD2?.Release();
-        argsBufferLOD0?.Release();
-        argsBufferLOD1?.Release();
-        argsBufferLOD2?.Release();
-        if (hizTexture != null) hizTexture.Release();
+        fieldRenderer?.Dispose(); fieldRenderer = null;
+        ReleaseLegacy();
     }
+    private void OnDestroy() { OnDisable(); }
 
-    // Editor helper to regenerate grass
     [ContextMenu("Regenerate Grass")]
-    private void RegenerateGrass()
-    {
-        OnDestroy();
-        InitializeBuffers();
-        DispatchComputeShader();
-    }
+    private void RegenerateGrass() { Refresh(); }
 
     // Gizmos for visualization in editor
     private void OnDrawGizmosSelected()

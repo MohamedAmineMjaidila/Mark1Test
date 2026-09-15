@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEditor;
+using GrassFlow;
+using GrassFlow.Editor;
 
 [CustomEditor(typeof(GrassRenderer))]
 public class GrassPainterEditor : Editor
@@ -157,6 +159,25 @@ public class GrassPainterEditor : Editor
         EditorGUILayout.LabelField("Grass Renderer", headerStyle);
         EditorGUILayout.Space(5);
 
+        SerializedProperty rendererMode = serializedObject.FindProperty("renderingMode");
+        EditorGUILayout.PropertyField(rendererMode);
+        bool experimental = rendererMode.enumValueIndex == (int)GrassRenderer.RenderingMode.ImmutableField;
+        if (experimental)
+        {
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("fieldData"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("experimentProfile"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("grassSun"));
+            EditorGUILayout.PropertyField(mainCamera);
+            EditorGUILayout.PropertyField(terrain);
+            EditorGUILayout.PropertyField(renderInEditMode);
+            EditorGUILayout.HelpBox("Paint the mask, then Bake Field to update grass placement. Select the profile asset to tune wind, shape, lighting and A/B presets.", MessageType.Info);
+            using (new EditorGUI.DisabledScope(EditorApplication.isPlaying))
+                if (GUILayout.Button("Bake Field from Terrain and Painted Mask")) BakeField();
+            if (grassRenderer.Field != null)
+                EditorGUILayout.LabelField($"{grassRenderer.Field.OccupiedCount:N0} occupied cells · {grassRenderer.Field.OccupancyBytes / 1048576f:F2} MiB occupancy");
+        }
+        else
+        {
         DrawSection("General Settings", ref showGrassSettings, () => {
             EditorGUILayout.PropertyField(customGrassMesh);
             EditorGUILayout.PropertyField(grassCount);
@@ -236,6 +257,8 @@ public class GrassPainterEditor : Editor
             EditorGUILayout.PropertyField(terrain);
         });
 
+        }
+
         DrawSection("Painting Tools", ref showPainting, () => {
             EditorGUILayout.PropertyField(densityMap);
             EditorGUILayout.PropertyField(densityThreshold);
@@ -310,6 +333,25 @@ public class GrassPainterEditor : Editor
         GUI.backgroundColor = Color.white;
 
         serializedObject.ApplyModifiedProperties();
+    }
+
+    private void BakeField()
+    {
+        serializedObject.ApplyModifiedProperties();
+        Terrain source = terrain.objectReferenceValue as Terrain;
+        if (!source) { Debug.LogWarning("Assign a terrain before baking grass.", grassRenderer); return; }
+        GrassFieldData field = grassRenderer.Field;
+        if (!field)
+        {
+            string path = EditorUtility.SaveFilePanelInProject("Save grass field", "GrassField", "asset", "Choose the baked grass field location.");
+            if (string.IsNullOrEmpty(path)) return;
+            field = ScriptableObject.CreateInstance<GrassFieldData>();
+            AssetDatabase.CreateAsset(field, path);
+            serializedObject.FindProperty("fieldData").objectReferenceValue = field;
+            serializedObject.ApplyModifiedProperties();
+        }
+        GrassFieldBaker.Bake(field, source.terrainData, grassRenderer.densityMap, field.CellSpacing, field.Seed, grassRenderer.densityThreshold);
+        grassRenderer.Refresh();
     }
 
     private void DrawSection(string title, ref bool foldout, System.Action drawContent)
