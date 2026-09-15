@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da82f927bcf1e496d9a95a0f429f41fc, type: 3}
+  m_Name: DirectGrid_BladeDryness
+  m_EditorClassIdentifier: Grass.Experimental::GrassFlow.GrassExperimentProfile
+  drawPath: 1
+  preset: 9
+  lod0Shader: {fileID: 4800000, guid: 99d8fd06f12a34a5d9b08577e848a892, type: 3}
+  lod1Shader: {fileID: 4800000, guid: 6ac2a64c46651485f8d5d9a6f95d20f7, type: 3}
+  lod2Shader: {fileID: 4800000, guid: 4e6237a9d6eb04b338cbfb5c4b8070e8, type: 3}
+  selectionShader: {fileID: 7200000, guid: c4ad859fb66b54c7cb5a7df5d227db9b, type: 3}
+  lod0Distance: 15
+  lod1Distance: 40
+  maxDrawDistance: 100
+  lod0Segments: 5
+  lod1Segments: 3
+  lod2Segments: 1
+  bladeHeights: {x: 0.3, y: 1}
+  bladeWidth: 0.05
+  naturalBend: 0.3
+  densityFalloffStart: 30
+  minimumDensity: 0.1
+  widthCompensation: 0.3
+  maximumWidthScale: 1.5
+  transitionWidth: 3
+  windDirection: {x: 1, y: 0}
+  windStrength: 0.35
+  windSpeed: 1
+  gustStrength: 0.35
+  flutterStrength: 0.04
+  rootColor: {r: 0.04, g: 0.08, b: 0.02, a: 1}
+  midColor: {r: 0.15, g: 0.35, b: 0.08, a: 1}
+  tipColor: {r: 0.45, g: 0.55, b: 0.15, a: 1}
+  dryColor: {r: 0.4, g: 0.35, b: 0.15, a: 1}
+  skyAmbient: {r: 0.18, g: 0.23, b: 0.3, a: 1}
+  groundAmbient: {r: 0.055, g: 0.07, b: 0.025, a: 1}
+  colorVariation: 0.2
+  dryness: 0.15
+  roundnessRadians: 0.65
+  normalStabilization: {x: 0, y: 0.3, z: 0.75}
+  rootDarkness: 0.4
+  aoCurveWeights: {x: 0, y: 1, z: 0}
+  transmission: 0.5
+  transmissionPower: 3
+  specular: 0.1
+  specularPower: 32
+  widening: 0.15
+  collectCounters: 0
+  counterInterval: 1
